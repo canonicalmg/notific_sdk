@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Notific.ai SDK - NPM Example</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .container {
+      border: 1px solid #eee;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    button {
+      padding: 10px 15px;
+      background-color: #0088ff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-right: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Notific.ai SDK - NPM Example</h1>
+  
+  <div class="container">
+    <p>This example demonstrates loading the Notific.ai SDK via NPM import.</p>
+    <p>In a real application, you would import the SDK like this:</p>
+    <pre>import { NotificAI } from 'notific-ai-sdk';</pre>
+    <p>For this example, we're using the UMD build to simulate an NPM import.</p>
+  </div>
+  
+  <div class="container">
+    <h2>Controls</h2>
+    <button id="initSDK" data-ai-action="init_sdk">Initialize SDK</button>
+    <button id="showChat" data-ai-action="show_chat">Show Chat</button>
+    <button id="hideChat" data-ai-action="hide_chat">Hide Chat</button>
+    <button id="sendMessage" data-ai-action="send_message">Send Test Message</button>
+    <button id="destroySDK" data-ai-action="destroy_sdk">Destroy SDK</button>
+  </div>
+  
+  <div class="container">
+    <h2>Actionable Elements</h2>
+    <p>These elements have the data-ai-* attributes that make them actionable by the AI assistant.</p>
+    
+    <div>
+      <label for="username">Username:</label>
+      <input type="text" id="username" data-ai-field="username" placeholder="Enter your username">
+    </div>
+    
+    <div style="margin-top: 10px;">
+      <button id="login" data-ai-action="login">Login</button>
+    </div>
+  </div>
+
+  <!-- Load the SDK (for demonstration purposes - normally you'd import it) -->
+  <script src="../../dist/sdk.js"></script>
+  
+  <script>
+    // Wait for DOM to be ready
+    document.addEventListener('DOMContentLoaded', function() {
+      // Check if the SDK is available
+      if (typeof NotificAI === 'undefined') {
+        console.error('SDK not found!');
+        return;
+      }
+      
+      let sdkInstance = null;
+      
+      // Add button event listeners
+      document.getElementById('initSDK').addEventListener('click', function() {
+        if (sdkInstance) {
+          console.log('SDK already initialized!');
+          return;
+        }
+        
+        // Create a new instance
+        sdkInstance = new NotificAI({
+          apiKey: 'demo-api-key',
+          debug: true,
+          chatWidget: {
+            enable: true,
+            position: 'right',
+            greeting: 'Hello! This SDK was initialized programmatically via the NPM method. How can I help you?'
+          }
+        });
+        
+        // Initialize the instance
+        sdkInstance.init();
+        console.log('SDK initialized successfully!');
+      });
+      
+      document.getElementById('showChat').addEventListener('click', function() {
+        if (!sdkInstance) {
+          alert('Please initialize the SDK first!');
+          return;
+        }
+        
+        sdkInstance.show();
+      });
+      
+      document.getElementById('hideChat').addEventListener('click', function() {
+        if (!sdkInstance) {
+          alert('Please initialize the SDK first!');
+          return;
+        }
+        
+        sdkInstance.hide();
+      });
+      
+      document.getElementById('sendMessage').addEventListener('click', function() {
+        if (!sdkInstance) {
+          alert('Please initialize the SDK first!');
+          return;
+        }
+        
+        sdkInstance.sendMessage('Can you help me log in?');
+      });
+      
+      document.getElementById('destroySDK').addEventListener('click', function() {
+        if (!sdkInstance) {
+          alert('The SDK is not initialized!');
+          return;
+        }
+        
+        sdkInstance.destroy();
+        sdkInstance = null;
+        console.log('SDK destroyed successfully!');
+      });
+    });
+  </script>
+</body>
+</html>

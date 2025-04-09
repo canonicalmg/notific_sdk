@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Notific.ai SDK Test</title>
+</head>
+<body>
+  <h1>Notific.ai SDK Test</h1>
+  <p>This page tests the basic functionality of the SDK.</p>
+  
+  <button id="testButton">Test SDK</button>
+  
+  <pre id="output"></pre>
+  
+  <script src="../dist/notific-ai-sdk.umd.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const outputElement = document.getElementById('output');
+      
+      function log(message) {
+        outputElement.textContent += message + '\n';
+      }
+      
+      log('Testing SDK...');
+      
+      if (typeof NotificAI === 'undefined') {
+        log('ERROR: NotificAI is undefined');
+      } else {
+        log('NotificAI found in global scope');
+        
+        if (typeof NotificAI === 'function') {
+          log('NotificAI is a constructor function');
+          
+          try {
+            const instance = new NotificAI({apiKey: 'test-key'});
+            log('Successfully created NotificAI instance');
+            log('Instance type: ' + typeof instance);
+            log('Instance constructor: ' + instance.constructor.name);
+            
+            // Try calling some methods
+            if (typeof instance.init === 'function') {
+              log('init method exists');
+            } else {
+              log('ERROR: init method missing');
+            }
+          } catch (error) {
+            log('ERROR creating instance: ' + error.message);
+          }
+        } else {
+          log('ERROR: NotificAI is not a constructor function');
+          log('NotificAI type: ' + typeof NotificAI);
+          log('NotificAI value: ' + JSON.stringify(NotificAI));
+        }
+      }
+      
+      document.getElementById('testButton').addEventListener('click', function() {
+        log('\nRefreshing test...');
+        location.reload();
+      });
+    });
+  </script>
+</body>
+</html>

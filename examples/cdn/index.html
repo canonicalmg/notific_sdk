@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Notific.ai SDK - CDN Example</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .container {
+      border: 1px solid #eee;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    button {
+      padding: 10px 15px;
+      background-color: #0088ff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-right: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Notific.ai SDK - CDN Example</h1>
+  
+  <div class="container">
+    <p>This example demonstrates loading the Notific.ai SDK via a CDN.</p>
+    <p>The script tag below has the <code>data-api-key</code> attribute which automatically initializes the SDK.</p>
+    <p>You can open your browser console to see debug messages.</p>
+  </div>
+  
+  <div class="container">
+    <h2>Controls</h2>
+    <button id="showChat" data-ai-action="show_chat">Show Chat</button>
+    <button id="hideChat" data-ai-action="hide_chat">Hide Chat</button>
+    <button id="sendMessage" data-ai-action="send_message">Send Test Message</button>
+  </div>
+  
+  <div class="container">
+    <h2>Actionable Elements</h2>
+    <p>These elements have the data-ai-* attributes that make them actionable by the AI assistant.</p>
+    
+    <div>
+      <label for="username">Username:</label>
+      <input type="text" id="username" data-ai-field="username" placeholder="Enter your username">
+    </div>
+    
+    <div style="margin-top: 10px;">
+      <button id="login" data-ai-action="login">Login</button>
+    </div>
+  </div>
+
+  <!-- Load the SDK using script tag with auto-initialization -->
+  <script 
+    src="../../dist/sdk.js" 
+    data-api-key="demo-api-key"
+    data-position="right"
+    data-debug
+  ></script>
+  
+  <script>
+    // Wait for DOM to be ready
+    document.addEventListener('DOMContentLoaded', function() {
+      // Check if the SDK was auto-initialized
+      if (window.NotificAI) {
+        console.log('SDK auto-initialized successfully!');
+        
+        // Add button event listeners
+        document.getElementById('showChat').addEventListener('click', function() {
+          window.NotificAI.show();
+        });
+        
+        document.getElementById('hideChat').addEventListener('click', function() {
+          window.NotificAI.hide();
+        });
+        
+        document.getElementById('sendMessage').addEventListener('click', function() {
+          window.NotificAI.sendMessage('Can you help me log in?');
+        });
+      } else {
+        console.error('SDK failed to initialize!');
+      }
+    });
+  </script>
+</body>
+</html>

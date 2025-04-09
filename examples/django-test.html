@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Django API Test - Notific.ai SDK</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    h1 {
+      color: #0088ff;
+    }
+    .card {
+      border: 1px solid #eee;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: 500;
+    }
+    input, textarea {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    button {
+      background-color: #0088ff;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .debug {
+      background-color: #f5f5f5;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 10px;
+      font-family: monospace;
+      white-space: pre-wrap;
+      height: 200px;
+      overflow: auto;
+    }
+  </style>
+</head>
+<body>
+  <h1>Django API Test - Notific.ai SDK</h1>
+  
+  <div class="card">
+    <h2>Test Form</h2>
+    <p>This is a simple form with data-ai-* attributes for testing the SDK with your Django backend.</p>
+    
+    <form id="testForm">
+      <div class="form-group">
+        <label for="name">Name</label>
+        <input type="text" id="name" data-ai-field="name" placeholder="Enter your name" value="Test User">
+      </div>
+      
+      <div class="form-group">
+        <label for="email">Email</label>
+        <input type="email" id="email" data-ai-field="email" placeholder="Enter your email" value="test@example.com">
+      </div>
+      
+      <div class="form-group">
+        <label for="message">Message</label>
+        <textarea id="message" rows="4" data-ai-field="message" placeholder="Enter your message">This is a test message</textarea>
+      </div>
+      
+      <button type="submit" data-ai-action="submit_form">Submit</button>
+      <button type="button" data-ai-action="clear_form">Clear</button>
+    </form>
+  </div>
+  
+  <div class="card">
+    <h2>SDK Controls</h2>
+    <button id="initSDK">Initialize SDK</button>
+    <button id="toggleChat">Toggle Chat</button>
+    <button id="destroySDK">Destroy SDK</button>
+    
+    <h3>Debug Actions</h3>
+    <button id="testSubmit">Test Submit Form</button>
+    <button id="testClear">Test Clear Form</button>
+    <button id="testActionDirect">Test Action Directly</button>
+  </div>
+  
+  <div class="card">
+    <h2>Debug Actions</h2>
+    <textarea id="actionData" rows="5" style="width: 100%; margin-bottom: 10px;" placeholder='Paste API response JSON here (e.g., {"type":"click","elementId":"action-123"})'>{"type":"click","elementId":"action-1744172930727-vefoayt","value":null}</textarea>
+    <button id="applyAction">Execute Pasted Action</button>
+    <div style="margin-top: 10px;">
+      <button id="debugSDK">Show SDK Info</button>
+      <button id="checkElements">Check Form Elements</button>
+    </div>
+    <div style="margin-top: 10px;">
+      <h3>Process Full API Response</h3>
+      <textarea id="fullResponse" rows="10" style="width: 100%; margin-bottom: 10px;" placeholder='Paste full API response JSON (with actions array)'>
+{
+    "response": {
+        "actions": [
+            {
+                "type": "click",
+                "elementId": "action-1744172930727-vefoayt",
+                "value": null
+            }
+        ],
+        "message": {
+            "id": "msg-4ba84a40-9ed0-4a6d-bd5d-c1c9277293c5",
+            "role": "assistant",
+            "content": "I have submitted the form for you.",
+            "timestamp": 1744173447328
+        }
+    },
+    "sessionId": "1ef1b034-418d-4c14-abbf-475adc143552"
+}
+      </textarea>
+      <button id="processFullResponse">Process Full Response</button>
+    </div>
+  </div>
+  
+  <div class="card">
+    <h2>Debug Console</h2>
+    <pre id="debug" class="debug"></pre>
+  </div>
+  
+  <!-- Load local configuration -->
+  <script src="local-config.js"></script>
+  
+  <!-- Load SDK -->
+  <script src="../dist/notific-ai-sdk-functional.js"></script>
+  
+  <script>
+    // Debug logging
+    const debug = document.getElementById('debug');
+    function log(message) {
+      debug.textContent += new Date().toLocaleTimeString() + ': ' + message + '\n';
+      debug.scrollTop = debug.scrollHeight;
+    }
+    
+    // Global SDK instance
+    let notificInstance = null;
+    
+    // Initialize the SDK
+    function initSDK() {
+      if (notificInstance) {
+        log('SDK already initialized');
+        return;
+      }
+      
+      try {
+        log('Initializing SDK...');
+        
+        // Check if NotificAI is a constructor or an object
+        if (typeof NotificAI === 'function') {
+          // If it's a constructor function
+          notificInstance = new NotificAI({
+            apiKey: 'demo-api-key',
+            endpoint: 'http://localhost:8000/api/interactive/',
+            debug: true,
+            chatWidget: {
+              enable: true,
+              position: 'right',
+              greeting: 'Hello! I can help you fill out this form. Try asking me something!'
+            }
+          });
+          notificInstance.init();
+        } else if (typeof NotificAI === 'object') {
+          // If it's exported as an object with a default property (common with webpack/rollup)
+          if (NotificAI.default && typeof NotificAI.default === 'function') {
+            // Try using the default export
+            notificInstance = new NotificAI.default({
+              apiKey: 'demo-api-key',
+              endpoint: 'http://localhost:8000/api/interactive/',
+              debug: true,
+              chatWidget: {
+                enable: true,
+                position: 'right',
+                greeting: 'Hello! I can help you fill out this form. Try asking me something!'
+              }
+            });
+            notificInstance.init();
+          } else {
+            // It might be a singleton instance
+            log('Using SDK as object instance');
+            notificInstance = NotificAI;
+            notificInstance.init({
+              apiKey: 'demo-api-key',
+              endpoint: 'http://localhost:8000/api/interactive/',
+              debug: true,
+              chatWidget: {
+                enable: true,
+                position: 'right',
+                greeting: 'Hello! I can help you fill out this form. Try asking me something!'
+              }
+            });
+          }
+        } else {
+          throw new Error('SDK not available or in unexpected format: ' + typeof NotificAI);
+        }
+        
+        log('SDK initialized successfully! Type: ' + typeof notificInstance);
+      } catch (error) {
+        log('Error initializing SDK: ' + error.message);
+      }
+    }
+    
+    // Handle form submission (prevent page reload)
+    document.getElementById('testForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      log('Form submitted');
+    });
+    
+    // Clear form
+    document.getElementById('testForm').querySelector('[data-ai-action="clear_form"]').addEventListener('click', function() {
+      document.getElementById('testForm').reset();
+      log('Form cleared');
+    });
+    
+    // Button event listeners
+    document.getElementById('initSDK').addEventListener('click', function() {
+      initSDK();
+      
+      // Make the instance globally available for patching
+      if (notificInstance) {
+        window.notificInstance = notificInstance;
+        log('Made SDK instance globally available for patching');
+      }
+      
+      // After SDK is initialized, apply patches
+      setTimeout(function() {
+        if (typeof window.patchActionExecutor === 'function') {
+          try {
+            window.patchActionExecutor();
+            log('Applied action executor patches');
+          } catch (e) {
+            log('Error applying patches: ' + e.message);
+          }
+        }
+      }, 500);
+    });
+    
+    document.getElementById('toggleChat').addEventListener('click', function() {
+      if (!notificInstance) {
+        log('SDK not initialized. Initialize it first.');
+        return;
+      }
+      
+      try {
+        notificInstance.show();
+        log('Chat widget toggled');
+      } catch (error) {
+        log('Error toggling chat: ' + error.message);
+      }
+    });
+    
+    document.getElementById('destroySDK').addEventListener('click', function() {
+      if (!notificInstance) {
+        log('SDK not initialized');
+        return;
+      }
+      
+      try {
+        notificInstance.destroy();
+        notificInstance = null;
+        log('SDK destroyed');
+      } catch (error) {
+        log('Error destroying SDK: ' + error.message);
+      }
+    });
+    
+    // Debug action buttons
+    document.getElementById('testSubmit').addEventListener('click', function() {
+      log('Testing submit form action');
+      if (typeof window.testAction === 'function') {
+        const result = window.testAction('submit');
+        log('Submit test result: ' + (result ? 'Success' : 'Failed to find button'));
+      } else {
+        log('Test function not available');
+      }
+    });
+    
+    document.getElementById('testClear').addEventListener('click', function() {
+      log('Testing clear form action');
+      
+      // Try multiple approaches to clear the form
+      try {
+        // Method 1: Use test function
+        if (typeof window.testAction === 'function') {
+          const result = window.testAction('clear');
+          if (result) {
+            log('Clear form via testAction: Success');
+            return;
+          }
+        }
+        
+        // Method 2: Use direct clear function
+        if (typeof window.clearForm === 'function') {
+          const result = window.clearForm();
+          if (result) {
+            log('Clear form via clearForm: Success');
+            return;
+          }
+        }
+        
+        // Method 3: Find button directly and click it
+        const clearButton = document.querySelector('[data-ai-action="clear_form"]');
+        if (clearButton) {
+          log('Found clear button directly, clicking it');
+          clearButton.click();
+          return;
+        }
+        
+        // Method 4: Reset form directly
+        const form = document.getElementById('testForm');
+        if (form) {
+          log('Resetting form directly as last resort');
+          form.reset();
+          return;
+        }
+        
+        log('ERROR: All form clearing methods failed');
+      } catch (e) {
+        log('Error clearing form: ' + e.message);
+      }
+    });
+    
+    document.getElementById('testActionDirect').addEventListener('click', function() {
+      log('Testing action directly with response data');
+      
+      // Create a test action that matches what you received from the API
+      const testAction = {
+        type: "click",
+        elementId: "action-1744172930727-vefoayt",
+        value: null
+      };
+      
+      // Get the submit button directly
+      const submitButton = document.querySelector('[data-ai-action="submit_form"]');
+      if (submitButton) {
+        log('Found submit button directly, clicking it');
+        submitButton.click();
+      } else {
+        log('Submit button not found directly');
+      }
+    });
+    
+    // Debug SDK button
+    document.getElementById('debugSDK').addEventListener('click', function() {
+      log('--- SDK DEBUG INFO ---');
+      log('NotificAI type: ' + typeof NotificAI);
+      if (typeof NotificAI === 'object') {
+        log('NotificAI properties: ' + Object.keys(NotificAI).join(', '));
+        log('Has default export: ' + (NotificAI.default ? 'Yes' : 'No'));
+        log('Has _instance: ' + (NotificAI._instance ? 'Yes' : 'No'));
+      }
+      
+      log('notificInstance type: ' + typeof notificInstance);
+      if (notificInstance) {
+        log('Is initialized: ' + (notificInstance.initialized ? 'Yes' : 'No'));
+        log('Has actionExecutor: ' + (notificInstance.actionExecutor ? 'Yes' : 'No'));
+      }
+    });
+    
+    // Check form elements
+    document.getElementById('checkElements').addEventListener('click', function() {
+      log('--- FORM ELEMENTS ---');
+      const fields = document.querySelectorAll('[data-ai-field]');
+      const actions = document.querySelectorAll('[data-ai-action]');
+      
+      log('Fields found: ' + fields.length);
+      fields.forEach(field => {
+        log('Field: ' + field.getAttribute('data-ai-field') + ' (ID: ' + (field.id || 'none') + ')');
+      });
+      
+      log('Actions found: ' + actions.length);
+      actions.forEach(action => {
+        log('Action: ' + action.getAttribute('data-ai-action') + ' (ID: ' + (action.id || 'none') + ')');
+      });
+    });
+    
+    // Apply pasted action
+    document.getElementById('applyAction').addEventListener('click', function() {
+      try {
+        const actionText = document.getElementById('actionData').value;
+        const action = JSON.parse(actionText);
+        
+        log('Executing custom action: ' + JSON.stringify(action));
+        
+        // First try to find element directly
+        if (action.type === 'click') {
+          const submitButton = document.querySelector('[data-ai-action="submit_form"]');
+          if (submitButton) {
+            log('Found submit button, clicking it');
+            submitButton.click();
+            return;
+          }
+        }
+        
+        // Fall back to ID match
+        const element = document.getElementById(action.elementId);
+        if (element) {
+          log('Found element by ID, clicking it');
+          element.click();
+        } else {
+          log('Element not found. Trying fallback...');
+          // Try by data attribute
+          const elementType = action.elementId.includes('field') ? 'field' : 'action';
+          if (elementType === 'action') {
+            const actionElements = document.querySelectorAll('[data-ai-action]');
+            if (actionElements.length > 0) {
+              log('Found action element as fallback, clicking it');
+              actionElements[0].click();
+            } else {
+              log('No fallback elements found');
+            }
+          }
+        }
+      } catch (e) {
+        log('Error executing action: ' + e.message);
+      }
+    });
+    
+    // Process full API response
+    document.getElementById('processFullResponse').addEventListener('click', function() {
+      try {
+        const responseText = document.getElementById('fullResponse').value;
+        const responseData = JSON.parse(responseText);
+        
+        log('Processing full API response...');
+        
+        // Extract actions
+        if (responseData && responseData.response && responseData.response.actions) {
+          const actions = responseData.response.actions;
+          log('Found ' + actions.length + ' actions to process');
+          
+          actions.forEach(action => {
+            log('Processing action: ' + JSON.stringify(action));
+            
+            if (action.type === 'click') {
+              // Check if it's a clear form action by inspecting the ID or extra data
+              const isClearAction = action.elementId.includes('clear') || 
+                                   (action.value && action.value.toString().toLowerCase().includes('clear'));
+              
+              if (isClearAction) {
+                // Handle clear form action
+                log('Processing as CLEAR form action');
+                const clearButton = document.querySelector('[data-ai-action="clear_form"]');
+                if (clearButton) {
+                  log('Found clear button, clicking it');
+                  clearButton.click();
+                } else {
+                  // Direct form reset as fallback
+                  const form = document.getElementById('testForm');
+                  if (form) {
+                    log('Clear button not found, resetting form directly');
+                    form.reset();
+                  } else {
+                    log('ERROR: Form not found for clearing');
+                  }
+                }
+              } else {
+                // Default to submit action
+                log('Processing as SUBMIT form action');
+                const submitButton = document.querySelector('[data-ai-action="submit_form"]');
+                if (submitButton) {
+                  log('Found submit button, clicking it');
+                  submitButton.click();
+                } else {
+                  log('Submit button not found');
+                }
+              }
+            } else {
+              log('Unsupported action type: ' + action.type);
+            }
+          });
+        } else {
+          log('No actions found in response');
+        }
+      } catch (e) {
+        log('Error processing response: ' + e.message);
+      }
+    });
+    
+    // Expose window.handleAIAction for direct testing
+    window.handleAIAction = function(action) {
+      log('Manually handling action: ' + JSON.stringify(action));
+      if (action.type === 'click') {
+        const submitButton = document.querySelector('[data-ai-action="submit_form"]');
+        if (submitButton) {
+          log('Found submit button, clicking it');
+          submitButton.click();
+          return true;
+        }
+      }
+      return false;
+    };
+    
+    // Log initial message
+    log('Page loaded. Click "Initialize SDK" to begin.');
+  </script>
+</body>
+</html>

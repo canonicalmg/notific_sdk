@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Notific.ai SDK Example</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    input, select, textarea {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 16px;
+    }
+    button {
+      background-color: #0088ff;
+      color: white;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    h1 {
+      color: #333;
+    }
+    .card {
+      border: 1px solid #eee;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+  </style>
+</head>
+<body>
+  <h1>Contact Information Form</h1>
+  
+  <div class="card">
+    <form id="contactForm">
+      <div class="form-group">
+        <label for="firstName">First Name</label>
+        <input type="text" id="firstName" data-ai-field="first_name" required>
+      </div>
+      
+      <div class="form-group">
+        <label for="lastName">Last Name</label>
+        <input type="text" id="lastName" data-ai-field="last_name" required>
+      </div>
+      
+      <div class="form-group">
+        <label for="email">Email Address</label>
+        <input type="email" id="email" data-ai-field="email" required>
+      </div>
+      
+      <div class="form-group">
+        <label for="phone">Phone Number</label>
+        <input type="tel" id="phone" data-ai-field="phone">
+      </div>
+      
+      <div class="form-group">
+        <label for="country">Country</label>
+        <select id="country" data-ai-field="country">
+          <option value="">Select a country</option>
+          <option value="us">United States</option>
+          <option value="ca">Canada</option>
+          <option value="uk">United Kingdom</option>
+          <option value="au">Australia</option>
+        </select>
+      </div>
+      
+      <div class="form-group">
+        <label for="message">Message</label>
+        <textarea id="message" rows="4" data-ai-field="message"></textarea>
+      </div>
+      
+      <button type="submit" data-ai-action="submit_contact">Submit</button>
+      <button type="reset" data-ai-action="reset_form">Clear Form</button>
+    </form>
+  </div>
+  
+  <div class="card">
+    <h2>Navigation</h2>
+    <p>Example navigation links the AI can help with:</p>
+    <ul>
+      <li><a href="#" data-ai-action="go_home">Home</a></li>
+      <li><a href="#" data-ai-action="view_products">Products</a></li>
+      <li><a href="#" data-ai-action="help_center">Help Center</a></li>
+      <li><a href="#" data-ai-action="contact_support">Contact Support</a></li>
+    </ul>
+  </div>
+
+  <!-- Load the SDK -->
+  <script>
+    // For NPM usage example
+    document.addEventListener('DOMContentLoaded', function() {
+      // This is only for demonstration - in a real app you'd import via NPM
+      if (window.NotificAI) {
+        const notific = new NotificAI({
+          apiKey: 'demo-api-key',
+          debug: true,
+          chatWidget: {
+            enable: true,
+            position: 'right',
+            greeting: 'Hello! I can help you fill out this form. Try asking me to "fill in your contact information" or "submit the form".'
+          }
+        });
+        
+        notific.init();
+        notific.show();
+        
+        // Handle form submission to prevent page reload
+        document.getElementById('contactForm').addEventListener('submit', function(e) {
+          e.preventDefault();
+          alert('Form submitted successfully!');
+        });
+      }
+    });
+  </script>
+  
+  <!-- For script tag usage example (comment out the above script and uncomment this for testing) -->
+  <!--
+  <script 
+    src="https://cdn.notific.ai/sdk.js" 
+    data-api-key="demo-api-key"
+    data-position="right"
+    data-debug
+  ></script>
+  -->
+</body>
+</html>
