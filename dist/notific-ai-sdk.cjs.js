@@ -1901,6 +1901,7 @@ var NotificAIClass = /*#__PURE__*/function () {
     }
     /**
      * Send a user message programmatically
+     * @returns The response from the API
      */
   }, {
     key: "sendMessage",
@@ -1915,6 +1916,8 @@ var NotificAIClass = /*#__PURE__*/function () {
               _context.next = 3;
               return this.handleUserMessage(message);
             case 3:
+              return _context.abrupt("return", _context.sent);
+            case 4:
             case "end":
               return _context.stop();
           }
@@ -1927,6 +1930,7 @@ var NotificAIClass = /*#__PURE__*/function () {
     }()
     /**
      * Handle a user message
+     * @returns The response from the API
      */
     )
   }, {
@@ -1978,7 +1982,7 @@ var NotificAIClass = /*#__PURE__*/function () {
                 return msg.id !== loadingMessage.id;
               });
               // Add the assistant message if available
-              if (response.response.message) {
+              if (response.response && response.response.message) {
                 this.messages.push(response.response.message);
               }
               // Update the chat widget if available
@@ -1986,14 +1990,14 @@ var NotificAIClass = /*#__PURE__*/function () {
                 this.chatWidget.updateMessages(this.messages);
               }
               // Execute actions if available
-              if (response.response.actions && response.response.actions.length > 0) {
+              if (response.response && response.response.actions && response.response.actions.length > 0) {
                 debugLog(this.config.debug || false, 'Executing actions', response.response.actions);
                 this.actionExecutor.executeActions(response.response.actions);
               }
-              _context2.next = 27;
-              break;
-            case 20:
-              _context2.prev = 20;
+              // Return the response
+              return _context2.abrupt("return", response);
+            case 21:
+              _context2.prev = 21;
               _context2.t0 = _context2["catch"](7);
               // Remove the loading message
               this.messages = this.messages.filter(function (msg) {
@@ -2012,11 +2016,13 @@ var NotificAIClass = /*#__PURE__*/function () {
                 this.chatWidget.updateMessages(this.messages);
               }
               console.error('Error handling user message:', _context2.t0);
-            case 27:
+              // Rethrow the error
+              throw _context2.t0;
+            case 29:
             case "end":
               return _context2.stop();
           }
-        }, _callee2, this, [[7, 20]]);
+        }, _callee2, this, [[7, 21]]);
       }));
       function handleUserMessage(_x2) {
         return _handleUserMessage.apply(this, arguments);

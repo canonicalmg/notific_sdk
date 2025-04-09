@@ -96,10 +96,12 @@ declare class NotificAIClass {
     destroy(): void;
     /**
      * Send a user message programmatically
+     * @returns The response from the API
      */
-    sendMessage(message: string): Promise<void>;
+    sendMessage(message: string): Promise<any>;
     /**
      * Handle a user message
+     * @returns The response from the API
      */
     private handleUserMessage;
     /**

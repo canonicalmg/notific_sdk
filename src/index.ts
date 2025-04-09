@@ -130,19 +130,21 @@ class NotificAIClass {
 
   /**
    * Send a user message programmatically
+   * @returns The response from the API
    */
-  public async sendMessage(message: string): Promise<void> {
+  public async sendMessage(message: string): Promise<any> {
     if (!this.initialized) {
       this.init();
     }
 
-    await this.handleUserMessage(message);
+    return await this.handleUserMessage(message);
   }
 
   /**
    * Handle a user message
+   * @returns The response from the API
    */
-  private async handleUserMessage(message: string): Promise<void> {
+  private async handleUserMessage(message: string): Promise<any> {
     if (!this.actionMapBuilder || !this.actionExecutor || !this.apiClient) {
       throw new Error('SDK not initialized properly');
     }
@@ -191,7 +193,7 @@ class NotificAIClass {
       this.messages = this.messages.filter(msg => msg.id !== loadingMessage.id);
 
       // Add the assistant message if available
-      if (response.response.message) {
+      if (response.response && response.response.message) {
         this.messages.push(response.response.message);
       }
 
@@ -201,7 +203,7 @@ class NotificAIClass {
       }
 
       // Execute actions if available
-      if (response.response.actions && response.response.actions.length > 0) {
+      if (response.response && response.response.actions && response.response.actions.length > 0) {
         debugLog(
           this.config.debug || false,
           'Executing actions',
@@ -210,6 +212,9 @@ class NotificAIClass {
         
         this.actionExecutor.executeActions(response.response.actions);
       }
+      
+      // Return the response
+      return response;
     } catch (error) {
       // Remove the loading message
       this.messages = this.messages.filter(msg => msg.id !== loadingMessage.id);
@@ -229,6 +234,9 @@ class NotificAIClass {
       }
 
       console.error('Error handling user message:', error);
+      
+      // Rethrow the error
+      throw error;
     }
   }
 
