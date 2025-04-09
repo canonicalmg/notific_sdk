@@ -1271,7 +1271,7 @@ var ApiClient = /*#__PURE__*/function () {
           while (1) switch (_context.prev = _context.next) {
             case 0:
               pageContext = _args.length > 2 && _args[2] !== undefined ? _args[2] : {};
-              url = "".concat(this.endpoint, "/process");
+              url = "".concat(this.endpoint, "/api/interactive/process");
               request = _objectSpread2(_objectSpread2({
                 message: message,
                 actionMap: actionMap
@@ -1356,7 +1356,7 @@ var ApiClient = /*#__PURE__*/function () {
               }
               return _context2.abrupt("return", false);
             case 2:
-              url = "".concat(this.endpoint, "/feedback");
+              url = "".concat(this.endpoint, "/api/interactive/feedback");
               _context2.prev = 3;
               _context2.next = 6;
               return fetch(url, {
@@ -1412,7 +1412,7 @@ var ApiClient = /*#__PURE__*/function () {
               }
               return _context3.abrupt("return", []);
             case 2:
-              url = "".concat(this.endpoint, "/conversation/").concat(this.sessionId);
+              url = "".concat(this.endpoint, "/api/interactive/conversation/").concat(this.sessionId);
               _context3.prev = 3;
               _context3.next = 6;
               return fetch(url, {

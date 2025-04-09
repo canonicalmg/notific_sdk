@@ -3,7 +3,8 @@ node_modules/
 jspm_packages/
 
 # Distribution directories
-dist/
+# Commented out to include built files in GitHub for CDN access
+# dist/
 build/
 
 # Environment variables

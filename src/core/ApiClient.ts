@@ -19,7 +19,7 @@ export class ApiClient {
     actionMap: ActionMap, 
     pageContext: any = {}
   ): Promise<APIResponse> {
-    const url = `${this.endpoint}/process`;
+    const url = `${this.endpoint}/api/interactive/process`;
     
     const request: APIRequest = {
       message,
@@ -84,7 +84,7 @@ export class ApiClient {
       return false;
     }
     
-    const url = `${this.endpoint}/feedback`;
+    const url = `${this.endpoint}/api/interactive/feedback`;
     
     try {
       const response = await fetch(url, {
@@ -119,7 +119,7 @@ export class ApiClient {
       return [];
     }
     
-    const url = `${this.endpoint}/conversation/${this.sessionId}`;
+    const url = `${this.endpoint}/api/interactive/conversation/${this.sessionId}`;
     
     try {
       const response = await fetch(url, {
