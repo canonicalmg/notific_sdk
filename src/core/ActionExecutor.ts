@@ -1,4 +1,4 @@
-import { Action, ActionableElement, ActionMap } from '../types';
+import { Action, ActionableElement, ActionMap, NavigationStep, ActionCatalogEntry, ActionCatalog } from '../types';
 
 export class ActionExecutor {
   private actionMap: ActionMap;
@@ -18,12 +18,78 @@ export class ActionExecutor {
   }
 
   /**
+   * Check if an action requires navigation steps before execution
+   */
+  public checkNavigationSteps(actionName: string): Action[] | null {
+    // Check if the actionCatalog has an entry for this action
+    if (this.actionMap.actionCatalog && this.actionMap.actionCatalog[actionName]) {
+      const entry = this.actionMap.actionCatalog[actionName];
+      
+      // Convert the navigation steps to actions
+      const navigationActions: Action[] = entry.navigationSteps.map(step => {
+        // Find the element ID for this navigation step
+        const element = this.actionMap.elements.find(el => 
+          el.name === step.action && 
+          (!step.param || el.accessParam === step.param)
+        );
+        
+        if (!element) {
+          console.error(`Cannot find element for navigation step: ${step.action}`);
+          return null;
+        }
+        
+        return {
+          type: 'click',
+          elementId: element.id
+        };
+      }).filter(Boolean) as Action[];
+      
+      return navigationActions.length > 0 ? navigationActions : null;
+    }
+    
+    return null;
+  }
+
+  /**
    * Execute a sequence of actions
    */
   public async executeActions(actions: Action[]): Promise<boolean> {
     try {
+      // Process each action, possibly with navigation
       for (const action of actions) {
+        // Check if this action is directly available
+        const targetElement = this.findElementById(action.elementId);
+        
+        if (!targetElement) {
+          // If not found directly, check if it's in our catalog
+          const elementInfo = this.actionMap.elements.find(el => el.id === action.elementId);
+          
+          if (elementInfo && elementInfo.name) {
+            const navigationActions = this.checkNavigationSteps(elementInfo.name);
+            
+            if (navigationActions) {
+              console.log(`Element ${elementInfo.name} requires navigation steps`);
+              
+              // Execute the navigation actions first
+              for (const navAction of navigationActions) {
+                await this.executeAction(navAction);
+                await this.delay(500); // Longer delay for navigation
+              }
+              
+              // Then try to find the element again after navigation
+              const newTargetElement = this.findElementById(action.elementId);
+              
+              if (!newTargetElement) {
+                console.error(`Element still not found after navigation: ${action.elementId}`);
+                continue;
+              }
+            }
+          }
+        }
+        
+        // Execute the action
         await this.executeAction(action);
+        
         // Add a small delay between actions for visual feedback
         await this.delay(300);
       }

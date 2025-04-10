@@ -446,6 +446,7 @@ var ActionMapBuilder = /*#__PURE__*/function () {
   function ActionMapBuilder() {
     _classCallCheck(this, ActionMapBuilder);
     this.observer = null;
+    this.actionCatalog = {}; // Store the full catalog of possible actions
     this.actionMap = this.createEmptyActionMap();
   }
   /**
@@ -455,6 +456,7 @@ var ActionMapBuilder = /*#__PURE__*/function () {
     key: "init",
     value: function init() {
       this.buildActionMap();
+      this.buildActionCatalog(); // Build the action catalog
       this.observeDOM();
     }
     /**
@@ -488,8 +490,56 @@ var ActionMapBuilder = /*#__PURE__*/function () {
         url: window.location.href,
         title: document.title,
         elements: [],
+        actionCatalog: {},
         timestamp: Date.now()
       };
+    }
+    /**
+     * Builds a comprehensive catalog of all possible actions in the application
+     * including those that are not currently visible in the DOM
+     */
+  }, {
+    key: "buildActionCatalog",
+    value: function buildActionCatalog() {
+      var _this = this;
+      // Start with an empty catalog
+      this.actionCatalog = {};
+      // Find all elements that provide access to other actions
+      var navigationElements = document.querySelectorAll('[data-ai-provides-access]');
+      // For each navigation element
+      navigationElements.forEach(function (element) {
+        var providesAccess = element.getAttribute('data-ai-provides-access');
+        if (!providesAccess) return;
+        var accessibleActions = providesAccess.split(',').map(function (a) {
+          return a.trim();
+        });
+        var actionId = element.getAttribute('data-ai-action');
+        var actionParam = element.getAttribute('data-ai-action-param');
+        if (!actionId) return;
+        // Create a navigation step for this element
+        var navigationStep = {
+          action: actionId
+        };
+        // Add parameter if present
+        if (actionParam) {
+          navigationStep.param = actionParam;
+        }
+        // For each action this element provides access to
+        accessibleActions.forEach(function (actionName) {
+          // Check if we already have a navigation path for this action
+          if (_this.actionCatalog[actionName]) {
+            // This means we've found another path to this action, we'll keep the shortest
+            console.warn("Multiple paths found for action: ".concat(actionName));
+          } else {
+            // Create a new entry in the catalog
+            _this.actionCatalog[actionName] = {
+              navigationSteps: [navigationStep]
+            };
+          }
+        });
+      });
+      // Add the action catalog to the action map
+      this.actionMap.actionCatalog = this.actionCatalog;
     }
     /**
      * Build the action map by scanning the DOM for actionable elements
@@ -497,7 +547,7 @@ var ActionMapBuilder = /*#__PURE__*/function () {
   }, {
     key: "buildActionMap",
     value: function buildActionMap() {
-      var _this = this;
+      var _this2 = this;
       // Reset the elements array
       this.actionMap = this.createEmptyActionMap();
       // Find all elements with data-ai-field or data-ai-action attributes
@@ -505,16 +555,16 @@ var ActionMapBuilder = /*#__PURE__*/function () {
       var actionElements = document.querySelectorAll('[data-ai-action]');
       // Process field elements
       fieldElements.forEach(function (element) {
-        var actionableElement = _this.processFieldElement(element);
+        var actionableElement = _this2.processFieldElement(element);
         if (actionableElement) {
-          _this.actionMap.elements.push(actionableElement);
+          _this2.actionMap.elements.push(actionableElement);
         }
       });
       // Process action elements
       actionElements.forEach(function (element) {
-        var actionableElement = _this.processActionElement(element);
+        var actionableElement = _this2.processActionElement(element);
         if (actionableElement) {
-          _this.actionMap.elements.push(actionableElement);
+          _this2.actionMap.elements.push(actionableElement);
         }
       });
     }
@@ -582,7 +632,10 @@ var ActionMapBuilder = /*#__PURE__*/function () {
       }
       // Calculate DOM path
       var path = this.getDomPath(element);
-      return {
+      // Check if this element provides access to other actions
+      var providesAccess = element.getAttribute('data-ai-provides-access');
+      var accessParam = element.getAttribute('data-ai-action-param');
+      var actionElement = {
         id: this.generateElementId(element),
         type: 'action',
         name: actionName,
@@ -595,6 +648,16 @@ var ActionMapBuilder = /*#__PURE__*/function () {
         disabled: element.hasAttribute('disabled'),
         path: path
       };
+      // Add accessibility information if available
+      if (providesAccess) {
+        actionElement.providesAccess = providesAccess.split(',').map(function (a) {
+          return a.trim();
+        });
+      }
+      if (accessParam) {
+        actionElement.accessParam = accessParam;
+      }
+      return actionElement;
     }
     /**
      * Find a label element associated with an input element
@@ -674,7 +737,7 @@ var ActionMapBuilder = /*#__PURE__*/function () {
   }, {
     key: "observeDOM",
     value: function observeDOM() {
-      var _this2 = this;
+      var _this3 = this;
       this.observer = new MutationObserver(function (mutations) {
         var shouldRebuildMap = false;
         var _iterator = _createForOfIteratorHelper(mutations),
@@ -719,7 +782,7 @@ var ActionMapBuilder = /*#__PURE__*/function () {
           _iterator.f();
         }
         if (shouldRebuildMap) {
-          _this2.buildActionMap();
+          _this3.buildActionMap();
         }
       });
       // Start observing the entire document for changes
@@ -750,57 +813,165 @@ var ActionExecutor = /*#__PURE__*/function () {
       this.elementCache.clear();
     }
     /**
+     * Check if an action requires navigation steps before execution
+     */
+  }, {
+    key: "checkNavigationSteps",
+    value: function checkNavigationSteps(actionName) {
+      var _this = this;
+      // Check if the actionCatalog has an entry for this action
+      if (this.actionMap.actionCatalog && this.actionMap.actionCatalog[actionName]) {
+        var entry = this.actionMap.actionCatalog[actionName];
+        // Convert the navigation steps to actions
+        var navigationActions = entry.navigationSteps.map(function (step) {
+          // Find the element ID for this navigation step
+          var element = _this.actionMap.elements.find(function (el) {
+            return el.name === step.action && (!step.param || el.accessParam === step.param);
+          });
+          if (!element) {
+            console.error("Cannot find element for navigation step: ".concat(step.action));
+            return null;
+          }
+          return {
+            type: 'click',
+            elementId: element.id
+          };
+        }).filter(Boolean);
+        return navigationActions.length > 0 ? navigationActions : null;
+      }
+      return null;
+    }
+    /**
      * Execute a sequence of actions
      */
   }, {
     key: "executeActions",
     value: (function () {
       var _executeActions = _asyncToGenerator(/*#__PURE__*/_regeneratorRuntime().mark(function _callee(actions) {
-        var _iterator, _step, action;
-        return _regeneratorRuntime().wrap(function _callee$(_context) {
-          while (1) switch (_context.prev = _context.next) {
+        var _this2 = this;
+        var _iterator, _step, _loop;
+        return _regeneratorRuntime().wrap(function _callee$(_context2) {
+          while (1) switch (_context2.prev = _context2.next) {
             case 0:
-              _context.prev = 0;
+              _context2.prev = 0;
+              // Process each action, possibly with navigation
               _iterator = _createForOfIteratorHelper(actions);
-              _context.prev = 2;
+              _context2.prev = 2;
+              _loop = /*#__PURE__*/_regeneratorRuntime().mark(function _loop() {
+                var action, targetElement, elementInfo, navigationActions, _iterator2, _step2, navAction, newTargetElement;
+                return _regeneratorRuntime().wrap(function _loop$(_context) {
+                  while (1) switch (_context.prev = _context.next) {
+                    case 0:
+                      action = _step.value;
+                      // Check if this action is directly available
+                      targetElement = _this2.findElementById(action.elementId);
+                      if (targetElement) {
+                        _context.next = 31;
+                        break;
+                      }
+                      // If not found directly, check if it's in our catalog
+                      elementInfo = _this2.actionMap.elements.find(function (el) {
+                        return el.id === action.elementId;
+                      });
+                      if (!(elementInfo && elementInfo.name)) {
+                        _context.next = 31;
+                        break;
+                      }
+                      navigationActions = _this2.checkNavigationSteps(elementInfo.name);
+                      if (!navigationActions) {
+                        _context.next = 31;
+                        break;
+                      }
+                      console.log("Element ".concat(elementInfo.name, " requires navigation steps"));
+                      // Execute the navigation actions first
+                      _iterator2 = _createForOfIteratorHelper(navigationActions);
+                      _context.prev = 9;
+                      _iterator2.s();
+                    case 11:
+                      if ((_step2 = _iterator2.n()).done) {
+                        _context.next = 19;
+                        break;
+                      }
+                      navAction = _step2.value;
+                      _context.next = 15;
+                      return _this2.executeAction(navAction);
+                    case 15:
+                      _context.next = 17;
+                      return _this2.delay(500);
+                    case 17:
+                      _context.next = 11;
+                      break;
+                    case 19:
+                      _context.next = 24;
+                      break;
+                    case 21:
+                      _context.prev = 21;
+                      _context.t0 = _context["catch"](9);
+                      _iterator2.e(_context.t0);
+                    case 24:
+                      _context.prev = 24;
+                      _iterator2.f();
+                      return _context.finish(24);
+                    case 27:
+                      // Then try to find the element again after navigation
+                      newTargetElement = _this2.findElementById(action.elementId);
+                      if (newTargetElement) {
+                        _context.next = 31;
+                        break;
+                      }
+                      console.error("Element still not found after navigation: ".concat(action.elementId));
+                      return _context.abrupt("return", 1);
+                    case 31:
+                      _context.next = 33;
+                      return _this2.executeAction(action);
+                    case 33:
+                      _context.next = 35;
+                      return _this2.delay(300);
+                    case 35:
+                    case "end":
+                      return _context.stop();
+                  }
+                }, _loop, null, [[9, 21, 24, 27]]);
+              });
               _iterator.s();
-            case 4:
+            case 5:
               if ((_step = _iterator.n()).done) {
-                _context.next = 12;
+                _context2.next = 11;
                 break;
               }
-              action = _step.value;
-              _context.next = 8;
-              return this.executeAction(action);
-            case 8:
-              _context.next = 10;
-              return this.delay(300);
-            case 10:
-              _context.next = 4;
+              return _context2.delegateYield(_loop(), "t0", 7);
+            case 7:
+              if (!_context2.t0) {
+                _context2.next = 9;
+                break;
+              }
+              return _context2.abrupt("continue", 9);
+            case 9:
+              _context2.next = 5;
               break;
-            case 12:
-              _context.next = 17;
+            case 11:
+              _context2.next = 16;
               break;
-            case 14:
-              _context.prev = 14;
-              _context.t0 = _context["catch"](2);
-              _iterator.e(_context.t0);
-            case 17:
-              _context.prev = 17;
+            case 13:
+              _context2.prev = 13;
+              _context2.t1 = _context2["catch"](2);
+              _iterator.e(_context2.t1);
+            case 16:
+              _context2.prev = 16;
               _iterator.f();
-              return _context.finish(17);
-            case 20:
-              return _context.abrupt("return", true);
-            case 23:
-              _context.prev = 23;
-              _context.t1 = _context["catch"](0);
-              console.error('Error executing actions:', _context.t1);
-              return _context.abrupt("return", false);
-            case 27:
+              return _context2.finish(16);
+            case 19:
+              return _context2.abrupt("return", true);
+            case 22:
+              _context2.prev = 22;
+              _context2.t2 = _context2["catch"](0);
+              console.error('Error executing actions:', _context2.t2);
+              return _context2.abrupt("return", false);
+            case 26:
             case "end":
-              return _context.stop();
+              return _context2.stop();
           }
-        }, _callee, this, [[0, 23], [2, 14, 17, 20]]);
+        }, _callee, null, [[0, 22], [2, 13, 16, 19]]);
       }));
       function executeActions(_x) {
         return _executeActions.apply(this, arguments);
@@ -816,51 +987,51 @@ var ActionExecutor = /*#__PURE__*/function () {
     value: (function () {
       var _executeAction = _asyncToGenerator(/*#__PURE__*/_regeneratorRuntime().mark(function _callee2(action) {
         var element;
-        return _regeneratorRuntime().wrap(function _callee2$(_context2) {
-          while (1) switch (_context2.prev = _context2.next) {
+        return _regeneratorRuntime().wrap(function _callee2$(_context3) {
+          while (1) switch (_context3.prev = _context3.next) {
             case 0:
               element = this.findElementById(action.elementId);
               if (element) {
-                _context2.next = 3;
+                _context3.next = 3;
                 break;
               }
               throw new Error("Element with ID ".concat(action.elementId, " not found"));
             case 3:
               // Add a visual highlight effect to the element
               this.highlightElement(element);
-              _context2.t0 = action.type;
-              _context2.next = _context2.t0 === 'fill' ? 7 : _context2.t0 === 'click' ? 10 : _context2.t0 === 'select' ? 13 : _context2.t0 === 'scroll' ? 16 : _context2.t0 === 'custom' ? 19 : 22;
+              _context3.t0 = action.type;
+              _context3.next = _context3.t0 === 'fill' ? 7 : _context3.t0 === 'click' ? 10 : _context3.t0 === 'select' ? 13 : _context3.t0 === 'scroll' ? 16 : _context3.t0 === 'custom' ? 19 : 22;
               break;
             case 7:
-              _context2.next = 9;
+              _context3.next = 9;
               return this.fillField(element, action.value || '');
             case 9:
-              return _context2.abrupt("break", 23);
+              return _context3.abrupt("break", 23);
             case 10:
-              _context2.next = 12;
+              _context3.next = 12;
               return this.clickElement(element);
             case 12:
-              return _context2.abrupt("break", 23);
+              return _context3.abrupt("break", 23);
             case 13:
-              _context2.next = 15;
+              _context3.next = 15;
               return this.selectOption(element, action.value || '');
             case 15:
-              return _context2.abrupt("break", 23);
+              return _context3.abrupt("break", 23);
             case 16:
-              _context2.next = 18;
+              _context3.next = 18;
               return this.scrollToElement(element);
             case 18:
-              return _context2.abrupt("break", 23);
+              return _context3.abrupt("break", 23);
             case 19:
-              _context2.next = 21;
+              _context3.next = 21;
               return this.executeCustomAction(element, action.options);
             case 21:
-              return _context2.abrupt("break", 23);
+              return _context3.abrupt("break", 23);
             case 22:
               throw new Error("Unknown action type: ".concat(action.type));
             case 23:
             case "end":
-              return _context2.stop();
+              return _context3.stop();
           }
         }, _callee2, this);
       }));
@@ -963,11 +1134,11 @@ var ActionExecutor = /*#__PURE__*/function () {
     value: (function () {
       var _fillField = _asyncToGenerator(/*#__PURE__*/_regeneratorRuntime().mark(function _callee3(element, value) {
         var i, _char, inputEvent, changeEvent;
-        return _regeneratorRuntime().wrap(function _callee3$(_context3) {
-          while (1) switch (_context3.prev = _context3.next) {
+        return _regeneratorRuntime().wrap(function _callee3$(_context4) {
+          while (1) switch (_context4.prev = _context4.next) {
             case 0:
               if (!(element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement)) {
-                _context3.next = 19;
+                _context4.next = 19;
                 break;
               }
               // Clear the current value
@@ -978,7 +1149,7 @@ var ActionExecutor = /*#__PURE__*/function () {
               i = 0;
             case 4:
               if (!(i < value.length)) {
-                _context3.next = 14;
+                _context4.next = 14;
                 break;
               }
               _char = value.charAt(i);
@@ -989,11 +1160,11 @@ var ActionExecutor = /*#__PURE__*/function () {
               });
               element.dispatchEvent(inputEvent);
               // Add a small delay between characters to simulate typing
-              _context3.next = 11;
+              _context4.next = 11;
               return this.delay(50);
             case 11:
               i++;
-              _context3.next = 4;
+              _context4.next = 4;
               break;
             case 14:
               // Dispatch change event
@@ -1003,13 +1174,13 @@ var ActionExecutor = /*#__PURE__*/function () {
               element.dispatchEvent(changeEvent);
               // Blur the element
               element.blur();
-              _context3.next = 20;
+              _context4.next = 20;
               break;
             case 19:
               throw new Error('Element is not an input field');
             case 20:
             case "end":
-              return _context3.stop();
+              return _context4.stop();
           }
         }, _callee3, this);
       }));
@@ -1027,10 +1198,10 @@ var ActionExecutor = /*#__PURE__*/function () {
     value: (function () {
       var _clickElement = _asyncToGenerator(/*#__PURE__*/_regeneratorRuntime().mark(function _callee4(element) {
         var mousedownEvent, mouseupEvent, clickEvent;
-        return _regeneratorRuntime().wrap(function _callee4$(_context4) {
-          while (1) switch (_context4.prev = _context4.next) {
+        return _regeneratorRuntime().wrap(function _callee4$(_context5) {
+          while (1) switch (_context5.prev = _context5.next) {
             case 0:
-              _context4.next = 2;
+              _context5.next = 2;
               return this.scrollToElement(element);
             case 2:
               // Simulate a mousedown event
@@ -1041,7 +1212,7 @@ var ActionExecutor = /*#__PURE__*/function () {
               });
               element.dispatchEvent(mousedownEvent);
               // Small delay between events
-              _context4.next = 6;
+              _context5.next = 6;
               return this.delay(50);
             case 6:
               // Simulate a mouseup event
@@ -1060,7 +1231,7 @@ var ActionExecutor = /*#__PURE__*/function () {
               element.dispatchEvent(clickEvent);
             case 10:
             case "end":
-              return _context4.stop();
+              return _context5.stop();
           }
         }, _callee4, this);
       }));
@@ -1078,11 +1249,11 @@ var ActionExecutor = /*#__PURE__*/function () {
     value: (function () {
       var _selectOption = _asyncToGenerator(/*#__PURE__*/_regeneratorRuntime().mark(function _callee5(element, value) {
         var optionFound, _i2, _Array$from2, option, changeEvent;
-        return _regeneratorRuntime().wrap(function _callee5$(_context5) {
-          while (1) switch (_context5.prev = _context5.next) {
+        return _regeneratorRuntime().wrap(function _callee5$(_context6) {
+          while (1) switch (_context6.prev = _context6.next) {
             case 0:
               if (!(element instanceof HTMLSelectElement)) {
-                _context5.next = 18;
+                _context6.next = 18;
                 break;
               }
               // Try to find the option with the given value or text
@@ -1090,24 +1261,24 @@ var ActionExecutor = /*#__PURE__*/function () {
               _i2 = 0, _Array$from2 = Array.from(element.options);
             case 3:
               if (!(_i2 < _Array$from2.length)) {
-                _context5.next = 12;
+                _context6.next = 12;
                 break;
               }
               option = _Array$from2[_i2];
               if (!(option.value === value || option.text === value)) {
-                _context5.next = 9;
+                _context6.next = 9;
                 break;
               }
               element.value = option.value;
               optionFound = true;
-              return _context5.abrupt("break", 12);
+              return _context6.abrupt("break", 12);
             case 9:
               _i2++;
-              _context5.next = 3;
+              _context6.next = 3;
               break;
             case 12:
               if (optionFound) {
-                _context5.next = 14;
+                _context6.next = 14;
                 break;
               }
               throw new Error("Option with value or text \"".concat(value, "\" not found in select element"));
@@ -1117,13 +1288,13 @@ var ActionExecutor = /*#__PURE__*/function () {
                 bubbles: true
               });
               element.dispatchEvent(changeEvent);
-              _context5.next = 19;
+              _context6.next = 19;
               break;
             case 18:
               throw new Error('Element is not a select element');
             case 19:
             case "end":
-              return _context5.stop();
+              return _context6.stop();
           }
         }, _callee5);
       }));
@@ -1141,13 +1312,13 @@ var ActionExecutor = /*#__PURE__*/function () {
     value: (function () {
       var _scrollToElement = _asyncToGenerator(/*#__PURE__*/_regeneratorRuntime().mark(function _callee6(element) {
         var rect, isInViewport;
-        return _regeneratorRuntime().wrap(function _callee6$(_context6) {
-          while (1) switch (_context6.prev = _context6.next) {
+        return _regeneratorRuntime().wrap(function _callee6$(_context7) {
+          while (1) switch (_context7.prev = _context7.next) {
             case 0:
               rect = element.getBoundingClientRect();
               isInViewport = rect.top >= 0 && rect.left >= 0 && rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) && rect.right <= (window.innerWidth || document.documentElement.clientWidth);
               if (isInViewport) {
-                _context6.next = 6;
+                _context7.next = 6;
                 break;
               }
               element.scrollIntoView({
@@ -1155,11 +1326,11 @@ var ActionExecutor = /*#__PURE__*/function () {
                 block: 'center'
               });
               // Wait for the scroll to complete
-              _context6.next = 6;
+              _context7.next = 6;
               return this.delay(500);
             case 6:
             case "end":
-              return _context6.stop();
+              return _context7.stop();
           }
         }, _callee6, this);
       }));
@@ -1177,15 +1348,15 @@ var ActionExecutor = /*#__PURE__*/function () {
     value: (function () {
       var _executeCustomAction = _asyncToGenerator(/*#__PURE__*/_regeneratorRuntime().mark(function _callee7(element, options) {
         var hoverEvent, inputEvent, changeEvent;
-        return _regeneratorRuntime().wrap(function _callee7$(_context7) {
-          while (1) switch (_context7.prev = _context7.next) {
+        return _regeneratorRuntime().wrap(function _callee7$(_context8) {
+          while (1) switch (_context8.prev = _context8.next) {
             case 0:
               if (!(options && options.type)) {
-                _context7.next = 14;
+                _context8.next = 14;
                 break;
               }
-              _context7.t0 = options.type;
-              _context7.next = _context7.t0 === 'hover' ? 4 : _context7.t0 === 'focus' ? 7 : _context7.t0 === 'blur' ? 9 : _context7.t0 === 'setValue' ? 11 : 13;
+              _context8.t0 = options.type;
+              _context8.next = _context8.t0 === 'hover' ? 4 : _context8.t0 === 'focus' ? 7 : _context8.t0 === 'blur' ? 9 : _context8.t0 === 'setValue' ? 11 : 13;
               break;
             case 4:
               hoverEvent = new MouseEvent('mouseover', {
@@ -1194,13 +1365,13 @@ var ActionExecutor = /*#__PURE__*/function () {
                 view: window
               });
               element.dispatchEvent(hoverEvent);
-              return _context7.abrupt("break", 14);
+              return _context8.abrupt("break", 14);
             case 7:
               element.focus();
-              return _context7.abrupt("break", 14);
+              return _context8.abrupt("break", 14);
             case 9:
               element.blur();
-              return _context7.abrupt("break", 14);
+              return _context8.abrupt("break", 14);
             case 11:
               if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
                 element.value = options.value || '';
@@ -1213,12 +1384,12 @@ var ActionExecutor = /*#__PURE__*/function () {
                 });
                 element.dispatchEvent(changeEvent);
               }
-              return _context7.abrupt("break", 14);
+              return _context8.abrupt("break", 14);
             case 13:
               throw new Error("Unknown custom action type: ".concat(options.type));
             case 14:
             case "end":
-              return _context7.stop();
+              return _context8.stop();
           }
         }, _callee7);
       }));

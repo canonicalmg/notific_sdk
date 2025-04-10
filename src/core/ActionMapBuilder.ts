@@ -1,8 +1,9 @@
-import { ActionMap, ActionableElement } from '../types';
+import { ActionMap, ActionableElement, ActionCatalog, NavigationStep } from '../types';
 
 export class ActionMapBuilder {
   private observer: MutationObserver | null = null;
   private actionMap: ActionMap;
+  private actionCatalog: ActionCatalog = {}; // Store the full catalog of possible actions
 
   constructor() {
     this.actionMap = this.createEmptyActionMap();
@@ -13,6 +14,7 @@ export class ActionMapBuilder {
    */
   public init(): void {
     this.buildActionMap();
+    this.buildActionCatalog(); // Build the action catalog
     this.observeDOM();
   }
 
@@ -43,8 +45,60 @@ export class ActionMapBuilder {
       url: window.location.href,
       title: document.title,
       elements: [],
+      actionCatalog: {},
       timestamp: Date.now()
     };
+  }
+  
+  /**
+   * Builds a comprehensive catalog of all possible actions in the application
+   * including those that are not currently visible in the DOM
+   */
+  private buildActionCatalog(): void {
+    // Start with an empty catalog
+    this.actionCatalog = {};
+    
+    // Find all elements that provide access to other actions
+    const navigationElements = document.querySelectorAll('[data-ai-provides-access]');
+    
+    // For each navigation element
+    navigationElements.forEach(element => {
+      const providesAccess = element.getAttribute('data-ai-provides-access');
+      if (!providesAccess) return;
+      
+      const accessibleActions = providesAccess.split(',').map(a => a.trim());
+      const actionId = element.getAttribute('data-ai-action');
+      const actionParam = element.getAttribute('data-ai-action-param');
+      
+      if (!actionId) return;
+      
+      // Create a navigation step for this element
+      const navigationStep: NavigationStep = {
+        action: actionId
+      };
+      
+      // Add parameter if present
+      if (actionParam) {
+        navigationStep.param = actionParam;
+      }
+      
+      // For each action this element provides access to
+      accessibleActions.forEach(actionName => {
+        // Check if we already have a navigation path for this action
+        if (this.actionCatalog[actionName]) {
+          // This means we've found another path to this action, we'll keep the shortest
+          console.warn(`Multiple paths found for action: ${actionName}`);
+        } else {
+          // Create a new entry in the catalog
+          this.actionCatalog[actionName] = {
+            navigationSteps: [navigationStep]
+          };
+        }
+      });
+    });
+    
+    // Add the action catalog to the action map
+    this.actionMap.actionCatalog = this.actionCatalog;
   }
 
   /**
@@ -143,7 +197,11 @@ export class ActionMapBuilder {
     // Calculate DOM path
     const path = this.getDomPath(element);
     
-    return {
+    // Check if this element provides access to other actions
+    const providesAccess = element.getAttribute('data-ai-provides-access');
+    const accessParam = element.getAttribute('data-ai-action-param');
+    
+    const actionElement: ActionableElement = {
       id: this.generateElementId(element),
       type: 'action',
       name: actionName,
@@ -156,6 +214,17 @@ export class ActionMapBuilder {
       disabled: element.hasAttribute('disabled'),
       path
     };
+    
+    // Add accessibility information if available
+    if (providesAccess) {
+      actionElement.providesAccess = providesAccess.split(',').map(a => a.trim());
+    }
+    
+    if (accessParam) {
+      actionElement.accessParam = accessParam;
+    }
+    
+    return actionElement;
   }
 
   /**

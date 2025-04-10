@@ -9,9 +9,14 @@ export interface SDKConfig {
   };
 }
 
+export interface NavigationStep {
+  action: string;
+  param?: string;
+}
+
 export interface ActionableElement {
   id: string;
-  type: 'field' | 'action';
+  type: 'field' | 'action' | 'navigation';
   name: string;
   value?: string;
   position: {
@@ -24,6 +29,17 @@ export interface ActionableElement {
   required?: boolean;
   disabled?: boolean;
   path: string[];
+  // New properties for accessibility and navigation
+  providesAccess?: string[];
+  accessParam?: string;
+}
+
+export interface ActionCatalogEntry {
+  navigationSteps: NavigationStep[];
+}
+
+export interface ActionCatalog {
+  [actionName: string]: ActionCatalogEntry;
 }
 
 export interface ActionMap {
@@ -31,6 +47,13 @@ export interface ActionMap {
   title: string;
   elements: ActionableElement[];
   timestamp: number;
+  // New properties for improved navigation
+  actionCatalog: ActionCatalog;
+  currentContext?: {
+    section?: string;
+    page?: string;
+    [key: string]: string | undefined;
+  };
 }
 
 export interface Message {

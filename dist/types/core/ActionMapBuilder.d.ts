@@ -2,6 +2,7 @@ import { ActionMap } from '../types';
 export declare class ActionMapBuilder {
     private observer;
     private actionMap;
+    private actionCatalog;
     constructor();
     /**
      * Initialize the action map builder and start observing DOM changes
@@ -19,6 +20,11 @@ export declare class ActionMapBuilder {
      * Create an empty action map structure
      */
     private createEmptyActionMap;
+    /**
+     * Builds a comprehensive catalog of all possible actions in the application
+     * including those that are not currently visible in the DOM
+     */
+    private buildActionCatalog;
     /**
      * Build the action map by scanning the DOM for actionable elements
      */

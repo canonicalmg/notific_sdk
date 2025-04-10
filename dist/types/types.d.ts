@@ -8,9 +8,13 @@ export interface SDKConfig {
         customCSS?: string;
     };
 }
+export interface NavigationStep {
+    action: string;
+    param?: string;
+}
 export interface ActionableElement {
     id: string;
-    type: 'field' | 'action';
+    type: 'field' | 'action' | 'navigation';
     name: string;
     value?: string;
     position: {
@@ -23,12 +27,26 @@ export interface ActionableElement {
     required?: boolean;
     disabled?: boolean;
     path: string[];
+    providesAccess?: string[];
+    accessParam?: string;
+}
+export interface ActionCatalogEntry {
+    navigationSteps: NavigationStep[];
+}
+export interface ActionCatalog {
+    [actionName: string]: ActionCatalogEntry;
 }
 export interface ActionMap {
     url: string;
     title: string;
     elements: ActionableElement[];
     timestamp: number;
+    actionCatalog: ActionCatalog;
+    currentContext?: {
+        section?: string;
+        page?: string;
+        [key: string]: string | undefined;
+    };
 }
 export interface Message {
     id: string;

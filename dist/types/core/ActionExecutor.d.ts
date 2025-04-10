@@ -8,6 +8,10 @@ export declare class ActionExecutor {
      */
     updateActionMap(actionMap: ActionMap): void;
     /**
+     * Check if an action requires navigation steps before execution
+     */
+    checkNavigationSteps(actionName: string): Action[] | null;
+    /**
      * Execute a sequence of actions
      */
     executeActions(actions: Action[]): Promise<boolean>;
