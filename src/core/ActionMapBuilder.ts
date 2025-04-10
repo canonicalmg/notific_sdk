@@ -61,7 +61,41 @@ export class ActionMapBuilder {
     // Find all elements that provide access to other actions
     const navigationElements = document.querySelectorAll('[data-ai-provides-access]');
     
-    // For each navigation element
+    // First, log our findings for debugging
+    console.log(`Found ${navigationElements.length} navigation elements with data-ai-provides-access`);
+    
+    // Special check: Look for tab navigation elements which are critical
+    const tabNavigationElements = document.querySelectorAll('[data-ai-action="switch_tab"]');
+    console.log(`Found ${tabNavigationElements.length} tab navigation elements`);
+    
+    if (tabNavigationElements.length > 0) {
+      // Create a mapping of tabs to the actions they provide access to
+      const tabActionMap: Record<string, string[]> = {};
+      
+      tabNavigationElements.forEach(element => {
+        const tabParam = element.getAttribute('data-ai-action-param');
+        const providesAccess = element.getAttribute('data-ai-provides-access');
+        
+        if (tabParam && providesAccess) {
+          tabActionMap[tabParam] = providesAccess.split(',').map(a => a.trim());
+          console.log(`Tab "${tabParam}" provides access to: ${tabActionMap[tabParam].join(', ')}`);
+        }
+      });
+      
+      // Create explicit catalog entries for workflows tab
+      // This is to ensure the "create workflow" action works reliably
+      if (tabActionMap['workflows'] && tabActionMap['workflows'].includes('create_workflow')) {
+        this.actionCatalog['create_workflow'] = {
+          navigationSteps: [{
+            action: 'switch_tab',
+            param: 'workflows'
+          }]
+        };
+        console.log('Added explicit navigation for create_workflow action');
+      }
+    }
+    
+    // For each navigation element with provides-access attribute
     navigationElements.forEach(element => {
       const providesAccess = element.getAttribute('data-ai-provides-access');
       if (!providesAccess) return;
@@ -84,18 +118,54 @@ export class ActionMapBuilder {
       
       // For each action this element provides access to
       accessibleActions.forEach(actionName => {
+        // Skip empty action names
+        if (!actionName.trim()) return;
+        
         // Check if we already have a navigation path for this action
         if (this.actionCatalog[actionName]) {
           // This means we've found another path to this action, we'll keep the shortest
-          console.warn(`Multiple paths found for action: ${actionName}`);
+          console.log(`Multiple paths found for action: ${actionName}`);
+          
+          // Only overwrite if the new path is shorter
+          if (this.actionCatalog[actionName].navigationSteps.length > 1) {
+            // New path is simpler, so we'll use it
+            this.actionCatalog[actionName] = {
+              navigationSteps: [navigationStep]
+            };
+          }
         } else {
           // Create a new entry in the catalog
           this.actionCatalog[actionName] = {
             navigationSteps: [navigationStep]
           };
+          console.log(`Added catalog entry for action: ${actionName}`);
         }
       });
     });
+    
+    // Add explicit catalog entries for common tabs using the tab button elements
+    // This ensures tab navigation works even when the provides-access attribute is missing
+    const allTabButtons = document.querySelectorAll('[data-ai-action="switch_tab"]');
+    allTabButtons.forEach(tabButton => {
+      const tabParam = tabButton.getAttribute('data-ai-action-param');
+      if (tabParam) {
+        // Create a unique catalog entry name for this tab
+        const tabActionName = `navigate_to_${tabParam}`;
+        
+        // Add it to the catalog
+        this.actionCatalog[tabActionName] = {
+          navigationSteps: [{
+            action: 'switch_tab',
+            param: tabParam
+          }]
+        };
+        console.log(`Added explicit tab navigation entry for: ${tabActionName}`);
+      }
+    });
+    
+    // Log the complete catalog for debugging
+    console.log('Action catalog built:', this.actionCatalog);
+    console.log(`Total action catalog entries: ${Object.keys(this.actionCatalog).length}`);
     
     // Add the action catalog to the action map
     this.actionMap.actionCatalog = this.actionCatalog;

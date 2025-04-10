@@ -510,7 +510,37 @@ var ActionMapBuilder = /*#__PURE__*/function () {
       this.actionCatalog = {};
       // Find all elements that provide access to other actions
       var navigationElements = document.querySelectorAll('[data-ai-provides-access]');
-      // For each navigation element
+      // First, log our findings for debugging
+      console.log("Found ".concat(navigationElements.length, " navigation elements with data-ai-provides-access"));
+      // Special check: Look for tab navigation elements which are critical
+      var tabNavigationElements = document.querySelectorAll('[data-ai-action="switch_tab"]');
+      console.log("Found ".concat(tabNavigationElements.length, " tab navigation elements"));
+      if (tabNavigationElements.length > 0) {
+        // Create a mapping of tabs to the actions they provide access to
+        var tabActionMap = {};
+        tabNavigationElements.forEach(function (element) {
+          var tabParam = element.getAttribute('data-ai-action-param');
+          var providesAccess = element.getAttribute('data-ai-provides-access');
+          if (tabParam && providesAccess) {
+            tabActionMap[tabParam] = providesAccess.split(',').map(function (a) {
+              return a.trim();
+            });
+            console.log("Tab \"".concat(tabParam, "\" provides access to: ").concat(tabActionMap[tabParam].join(', ')));
+          }
+        });
+        // Create explicit catalog entries for workflows tab
+        // This is to ensure the "create workflow" action works reliably
+        if (tabActionMap['workflows'] && tabActionMap['workflows'].includes('create_workflow')) {
+          this.actionCatalog['create_workflow'] = {
+            navigationSteps: [{
+              action: 'switch_tab',
+              param: 'workflows'
+            }]
+          };
+          console.log('Added explicit navigation for create_workflow action');
+        }
+      }
+      // For each navigation element with provides-access attribute
       navigationElements.forEach(function (element) {
         var providesAccess = element.getAttribute('data-ai-provides-access');
         if (!providesAccess) return;
@@ -530,18 +560,49 @@ var ActionMapBuilder = /*#__PURE__*/function () {
         }
         // For each action this element provides access to
         accessibleActions.forEach(function (actionName) {
+          // Skip empty action names
+          if (!actionName.trim()) return;
           // Check if we already have a navigation path for this action
           if (_this.actionCatalog[actionName]) {
             // This means we've found another path to this action, we'll keep the shortest
-            console.warn("Multiple paths found for action: ".concat(actionName));
+            console.log("Multiple paths found for action: ".concat(actionName));
+            // Only overwrite if the new path is shorter
+            if (_this.actionCatalog[actionName].navigationSteps.length > 1) {
+              // New path is simpler, so we'll use it
+              _this.actionCatalog[actionName] = {
+                navigationSteps: [navigationStep]
+              };
+            }
           } else {
             // Create a new entry in the catalog
             _this.actionCatalog[actionName] = {
               navigationSteps: [navigationStep]
             };
+            console.log("Added catalog entry for action: ".concat(actionName));
           }
         });
       });
+      // Add explicit catalog entries for common tabs using the tab button elements
+      // This ensures tab navigation works even when the provides-access attribute is missing
+      var allTabButtons = document.querySelectorAll('[data-ai-action="switch_tab"]');
+      allTabButtons.forEach(function (tabButton) {
+        var tabParam = tabButton.getAttribute('data-ai-action-param');
+        if (tabParam) {
+          // Create a unique catalog entry name for this tab
+          var tabActionName = "navigate_to_".concat(tabParam);
+          // Add it to the catalog
+          _this.actionCatalog[tabActionName] = {
+            navigationSteps: [{
+              action: 'switch_tab',
+              param: tabParam
+            }]
+          };
+          console.log("Added explicit tab navigation entry for: ".concat(tabActionName));
+        }
+      });
+      // Log the complete catalog for debugging
+      console.log('Action catalog built:', this.actionCatalog);
+      console.log("Total action catalog entries: ".concat(Object.keys(this.actionCatalog).length));
       // Add the action catalog to the action map
       this.actionMap.actionCatalog = this.actionCatalog;
     }
@@ -823,12 +884,55 @@ var ActionExecutor = /*#__PURE__*/function () {
     key: "checkNavigationSteps",
     value: function checkNavigationSteps(actionName) {
       var _this = this;
+      console.log("Checking navigation steps for action: ".concat(actionName));
       // Check if the actionCatalog has an entry for this action
       if (this.actionMap.actionCatalog && this.actionMap.actionCatalog[actionName]) {
         var entry = this.actionMap.actionCatalog[actionName];
+        console.log("Found catalog entry with ".concat(entry.navigationSteps.length, " navigation steps"));
         // Convert the navigation steps to actions
         var navigationActions = entry.navigationSteps.map(function (step) {
-          // Find the element ID for this navigation step
+          console.log("Processing navigation step: action=".concat(step.action, ", param=").concat(step.param || 'none'));
+          // Special case for switch_tab action since it's critical for navigation
+          if (step.action === 'switch_tab' && step.param) {
+            // Try to find any tab button with the matching param
+            var tabButtons = document.querySelectorAll('[data-ai-action="switch_tab"]');
+            var tabElement = null;
+            console.log("Found ".concat(tabButtons.length, " tab buttons to check for param ").concat(step.param));
+            // Try to find the tab with the matching param
+            for (var _i = 0, _Array$from = Array.from(tabButtons); _i < _Array$from.length; _i++) {
+              var btn = _Array$from[_i];
+              var btnParam = btn.getAttribute('data-ai-action-param');
+              if (btnParam === step.param) {
+                tabElement = _this.actionMap.elements.find(function (el) {
+                  return el.name === 'switch_tab' && el.accessParam === step.param;
+                });
+                if (tabElement) {
+                  console.log("Found matching tab element with ID ".concat(tabElement.id));
+                  break;
+                }
+              }
+            }
+            // If we found a matching tab element
+            if (tabElement) {
+              return {
+                type: 'click',
+                elementId: tabElement.id
+              };
+            }
+            // If we couldn't find a matching element in our action map
+            // Generate a generic tab action ID that our fallback mechanism can handle
+            console.log("Could not find tab element in action map, using generic ID for tab ".concat(step.param));
+            var randomId = Math.random().toString(36).substring(2, 8);
+            return {
+              type: 'click',
+              elementId: "notific-action-switch_tab-".concat(randomId),
+              // Store the param for the fallback mechanism
+              options: {
+                param: step.param
+              }
+            };
+          }
+          // Standard approach for other navigation steps
           var element = _this.actionMap.elements.find(function (el) {
             return el.name === step.action && (!step.param || el.accessParam === step.param);
           });
@@ -836,12 +940,16 @@ var ActionExecutor = /*#__PURE__*/function () {
             console.error("Cannot find element for navigation step: ".concat(step.action));
             return null;
           }
+          console.log("Found element ID ".concat(element.id, " for navigation step ").concat(step.action));
           return {
             type: 'click',
             elementId: element.id
           };
         }).filter(Boolean);
+        console.log("Generated ".concat(navigationActions.length, " navigation actions"));
         return navigationActions.length > 0 ? navigationActions : null;
+      } else {
+        console.log("No catalog entry found for action: ".concat(actionName));
       }
       return null;
     }
@@ -990,50 +1098,76 @@ var ActionExecutor = /*#__PURE__*/function () {
     key: "executeAction",
     value: (function () {
       var _executeAction = _asyncToGenerator(/*#__PURE__*/_regeneratorRuntime().mark(function _callee2(action) {
-        var element;
+        var element, tabButtons, _i2, _Array$from2, btn, btnParam;
         return _regeneratorRuntime().wrap(function _callee2$(_context3) {
           while (1) switch (_context3.prev = _context3.next) {
             case 0:
-              element = this.findElementById(action.elementId);
+              element = this.findElementById(action.elementId); // Special handling for switch_tab when we have param information in options
+              if (!(!element && action.elementId.includes('switch_tab') && action.options && action.options.param)) {
+                _context3.next = 15;
+                break;
+              }
+              console.log("Looking for tab button with param: ".concat(action.options.param));
+              tabButtons = document.querySelectorAll('[data-ai-action="switch_tab"]');
+              _i2 = 0, _Array$from2 = Array.from(tabButtons);
+            case 5:
+              if (!(_i2 < _Array$from2.length)) {
+                _context3.next = 15;
+                break;
+              }
+              btn = _Array$from2[_i2];
+              btnParam = btn.getAttribute('data-ai-action-param');
+              if (!(btnParam === action.options.param)) {
+                _context3.next = 12;
+                break;
+              }
+              console.log("Found tab button for ".concat(action.options.param, " via options"));
+              element = btn;
+              return _context3.abrupt("break", 15);
+            case 12:
+              _i2++;
+              _context3.next = 5;
+              break;
+            case 15:
               if (element) {
-                _context3.next = 3;
+                _context3.next = 17;
                 break;
               }
               throw new Error("Element with ID ".concat(action.elementId, " not found"));
-            case 3:
+            case 17:
               // Add a visual highlight effect to the element
               this.highlightElement(element);
               _context3.t0 = action.type;
-              _context3.next = _context3.t0 === 'fill' ? 7 : _context3.t0 === 'click' ? 10 : _context3.t0 === 'select' ? 13 : _context3.t0 === 'scroll' ? 16 : _context3.t0 === 'custom' ? 19 : 22;
+              _context3.next = _context3.t0 === 'fill' ? 21 : _context3.t0 === 'click' ? 24 : _context3.t0 === 'select' ? 27 : _context3.t0 === 'scroll' ? 30 : _context3.t0 === 'custom' ? 33 : 36;
               break;
-            case 7:
-              _context3.next = 9;
-              return this.fillField(element, action.value || '');
-            case 9:
-              return _context3.abrupt("break", 23);
-            case 10:
-              _context3.next = 12;
-              return this.clickElement(element);
-            case 12:
-              return _context3.abrupt("break", 23);
-            case 13:
-              _context3.next = 15;
-              return this.selectOption(element, action.value || '');
-            case 15:
-              return _context3.abrupt("break", 23);
-            case 16:
-              _context3.next = 18;
-              return this.scrollToElement(element);
-            case 18:
-              return _context3.abrupt("break", 23);
-            case 19:
-              _context3.next = 21;
-              return this.executeCustomAction(element, action.options);
             case 21:
-              return _context3.abrupt("break", 23);
-            case 22:
-              throw new Error("Unknown action type: ".concat(action.type));
+              _context3.next = 23;
+              return this.fillField(element, action.value || '');
             case 23:
+              return _context3.abrupt("break", 37);
+            case 24:
+              _context3.next = 26;
+              return this.clickElement(element);
+            case 26:
+              return _context3.abrupt("break", 37);
+            case 27:
+              _context3.next = 29;
+              return this.selectOption(element, action.value || '');
+            case 29:
+              return _context3.abrupt("break", 37);
+            case 30:
+              _context3.next = 32;
+              return this.scrollToElement(element);
+            case 32:
+              return _context3.abrupt("break", 37);
+            case 33:
+              _context3.next = 35;
+              return this.executeCustomAction(element, action.options);
+            case 35:
+              return _context3.abrupt("break", 37);
+            case 36:
+              throw new Error("Unknown action type: ".concat(action.type));
+            case 37:
             case "end":
               return _context3.stop();
           }
@@ -1064,15 +1198,39 @@ var ActionExecutor = /*#__PURE__*/function () {
       // If not found and we have element info, try to use the DOM path
       if (!element && elementInfo && elementInfo.path && elementInfo.path.length > 0) {
         try {
-          // Try to create a CSS selector from the path
-          var selector = elementInfo.path.join(' > ');
+          // Try to create a CSS selector from the path - ensure class names are properly escaped
+          // Process each path segment to escape any special characters in class names
+          var processedPath = elementInfo.path.map(function (segment) {
+            // Parse the segment into tag, id, and classes
+            var tagMatch = segment.match(/^([a-zA-Z0-9-]+)/);
+            var idMatch = segment.match(/#([a-zA-Z0-9-]+)/);
+            var classMatches = segment.match(/\.([a-zA-Z0-9_-][^\s.]*)/g);
+            // Start with the tag
+            var processed = tagMatch ? tagMatch[1] : '';
+            // Add the ID if it exists
+            if (idMatch) {
+              processed += "#".concat(idMatch[1]);
+            }
+            // Add properly escaped classes if they exist
+            if (classMatches) {
+              classMatches.forEach(function (classMatch) {
+                // Remove the dot and escape special characters
+                var className = classMatch.substring(1).replace(/([:\\.!@#$%^&*()+=])/g, '\\$1');
+                processed += ".".concat(className);
+              });
+            }
+            return processed;
+          });
+          // Create the final selector
+          var selector = processedPath.join(' > ');
+          console.log('Using selector:', selector);
           var elements = document.querySelectorAll(selector);
           if (elements.length === 1) {
             element = elements[0];
           } else if (elements.length > 1) {
             // If multiple elements match, try to find the one with the matching data attribute
-            for (var _i = 0, _Array$from = Array.from(elements); _i < _Array$from.length; _i++) {
-              var el = _Array$from[_i];
+            for (var _i3 = 0, _Array$from3 = Array.from(elements); _i3 < _Array$from3.length; _i3++) {
+              var el = _Array$from3[_i3];
               if (elementInfo.type === 'field' && el.getAttribute('data-ai-field') === elementInfo.name) {
                 element = el;
                 break;
@@ -1088,22 +1246,78 @@ var ActionExecutor = /*#__PURE__*/function () {
       }
       // If still not found, try some fallbacks based on ID patterns
       if (!element) {
-        // For dynamically generated action IDs from API
-        if (id.startsWith('action-')) {
+        // Check for notific-action- prefix to handle specific actions
+        if (id.startsWith('notific-action-')) {
+          // Extract the action name (everything after notific-action- and before any random suffix)
+          var actionMatch = id.match(/notific-action-([^-]+)/);
+          if (actionMatch && actionMatch[1]) {
+            var baseAction = actionMatch[1];
+            console.log("Trying fallback for action: ".concat(baseAction));
+            // Special handling for switch_tab action since it's critical for navigation
+            if (baseAction === 'switch_tab') {
+              // Try to find the tab element by data-ai-action attribute
+              var tabButtons = document.querySelectorAll('[data-ai-action="switch_tab"]');
+              if (tabButtons.length > 0) {
+                // If there's param information in the elementInfo, use it to find the right tab
+                if (elementInfo && elementInfo.accessParam) {
+                  // Look for the tab with the matching param attribute
+                  for (var _i4 = 0, _Array$from4 = Array.from(tabButtons); _i4 < _Array$from4.length; _i4++) {
+                    var btn = _Array$from4[_i4];
+                    if (btn.getAttribute('data-ai-action-param') === elementInfo.accessParam) {
+                      element = btn;
+                      console.log("Fallback: Found tab button for ".concat(elementInfo.accessParam));
+                      break;
+                    }
+                  }
+                }
+                // If not found with accessParam, just use the first one
+                if (!element) {
+                  element = tabButtons[0];
+                  console.log('Fallback: Found tab button (first one)');
+                }
+              }
+            }
+            // For standard actions like clear_form, submit_form, etc.
+            else {
+              // Look for elements with the exact data-ai-action
+              var actionElements = document.querySelectorAll("[data-ai-action=\"".concat(baseAction, "\"]"));
+              if (actionElements.length > 0) {
+                element = actionElements[0];
+                console.log("Fallback: Found ".concat(baseAction, " button by data-ai-action"));
+              }
+              // Otherwise resort to the old clear/submit checks
+              else if (baseAction.includes('clear')) {
+                var clearButtons = document.querySelectorAll('[data-ai-action="clear_form"]');
+                if (clearButtons.length > 0) {
+                  element = clearButtons[0];
+                  console.log('Fallback: Found clear button by data-ai-action');
+                }
+              } else {
+                var submitButtons = document.querySelectorAll('[data-ai-action="submit_form"]');
+                if (submitButtons.length > 0) {
+                  element = submitButtons[0];
+                  console.log('Fallback: Found submit button by data-ai-action');
+                }
+              }
+            }
+          }
+        }
+        // For old dynamically generated action IDs from API
+        else if (id.startsWith('action-')) {
           // Check if this looks like a clear action
           var isClearAction = id.includes('clear');
           if (isClearAction) {
             // Look for clear form button
-            var clearButtons = document.querySelectorAll('[data-ai-action="clear_form"]');
-            if (clearButtons.length > 0) {
-              element = clearButtons[0];
+            var _clearButtons = document.querySelectorAll('[data-ai-action="clear_form"]');
+            if (_clearButtons.length > 0) {
+              element = _clearButtons[0];
               console.log('Fallback: Found clear button by data-ai-action');
             }
           } else {
             // Default to submit action
-            var submitButtons = document.querySelectorAll('[data-ai-action="submit_form"]');
-            if (submitButtons.length > 0) {
-              element = submitButtons[0];
+            var _submitButtons = document.querySelectorAll('[data-ai-action="submit_form"]');
+            if (_submitButtons.length > 0) {
+              element = _submitButtons[0];
               console.log('Fallback: Found submit button by data-ai-action');
             }
           }
@@ -1252,7 +1466,7 @@ var ActionExecutor = /*#__PURE__*/function () {
     key: "selectOption",
     value: (function () {
       var _selectOption = _asyncToGenerator(/*#__PURE__*/_regeneratorRuntime().mark(function _callee5(element, value) {
-        var optionFound, _i2, _Array$from2, option, changeEvent;
+        var optionFound, _i5, _Array$from5, option, changeEvent;
         return _regeneratorRuntime().wrap(function _callee5$(_context6) {
           while (1) switch (_context6.prev = _context6.next) {
             case 0:
@@ -1262,13 +1476,13 @@ var ActionExecutor = /*#__PURE__*/function () {
               }
               // Try to find the option with the given value or text
               optionFound = false;
-              _i2 = 0, _Array$from2 = Array.from(element.options);
+              _i5 = 0, _Array$from5 = Array.from(element.options);
             case 3:
-              if (!(_i2 < _Array$from2.length)) {
+              if (!(_i5 < _Array$from5.length)) {
                 _context6.next = 12;
                 break;
               }
-              option = _Array$from2[_i2];
+              option = _Array$from5[_i5];
               if (!(option.value === value || option.text === value)) {
                 _context6.next = 9;
                 break;
@@ -1277,7 +1491,7 @@ var ActionExecutor = /*#__PURE__*/function () {
               optionFound = true;
               return _context6.abrupt("break", 12);
             case 9:
-              _i2++;
+              _i5++;
               _context6.next = 3;
               break;
             case 12:

@@ -21,13 +21,62 @@ export class ActionExecutor {
    * Check if an action requires navigation steps before execution
    */
   public checkNavigationSteps(actionName: string): Action[] | null {
+    console.log(`Checking navigation steps for action: ${actionName}`);
+    
     // Check if the actionCatalog has an entry for this action
     if (this.actionMap.actionCatalog && this.actionMap.actionCatalog[actionName]) {
       const entry = this.actionMap.actionCatalog[actionName];
+      console.log(`Found catalog entry with ${entry.navigationSteps.length} navigation steps`);
       
       // Convert the navigation steps to actions
       const navigationActions: Action[] = entry.navigationSteps.map(step => {
-        // Find the element ID for this navigation step
+        console.log(`Processing navigation step: action=${step.action}, param=${step.param || 'none'}`);
+        
+        // Special case for switch_tab action since it's critical for navigation
+        if (step.action === 'switch_tab' && step.param) {
+          // Try to find any tab button with the matching param
+          const tabButtons = document.querySelectorAll('[data-ai-action="switch_tab"]');
+          let tabElement = null;
+          
+          console.log(`Found ${tabButtons.length} tab buttons to check for param ${step.param}`);
+          
+          // Try to find the tab with the matching param
+          for (const btn of Array.from(tabButtons)) {
+            const btnParam = btn.getAttribute('data-ai-action-param');
+            if (btnParam === step.param) {
+              tabElement = this.actionMap.elements.find(el => 
+                el.name === 'switch_tab' && 
+                el.accessParam === step.param
+              );
+              
+              if (tabElement) {
+                console.log(`Found matching tab element with ID ${tabElement.id}`);
+                break;
+              }
+            }
+          }
+          
+          // If we found a matching tab element
+          if (tabElement) {
+            return {
+              type: 'click',
+              elementId: tabElement.id
+            };
+          }
+          
+          // If we couldn't find a matching element in our action map
+          // Generate a generic tab action ID that our fallback mechanism can handle
+          console.log(`Could not find tab element in action map, using generic ID for tab ${step.param}`);
+          const randomId = Math.random().toString(36).substring(2, 8);
+          return {
+            type: 'click',
+            elementId: `notific-action-switch_tab-${randomId}`,
+            // Store the param for the fallback mechanism
+            options: { param: step.param }
+          };
+        }
+        
+        // Standard approach for other navigation steps
         const element = this.actionMap.elements.find(el => 
           el.name === step.action && 
           (!step.param || el.accessParam === step.param)
@@ -38,13 +87,18 @@ export class ActionExecutor {
           return null;
         }
         
+        console.log(`Found element ID ${element.id} for navigation step ${step.action}`);
         return {
           type: 'click',
           elementId: element.id
         };
       }).filter(Boolean) as Action[];
       
+      console.log(`Generated ${navigationActions.length} navigation actions`);
+      
       return navigationActions.length > 0 ? navigationActions : null;
+    } else {
+      console.log(`No catalog entry found for action: ${actionName}`);
     }
     
     return null;
@@ -104,7 +158,23 @@ export class ActionExecutor {
    * Execute a single action
    */
   private async executeAction(action: Action): Promise<void> {
-    const element = this.findElementById(action.elementId);
+    let element = this.findElementById(action.elementId);
+    
+    // Special handling for switch_tab when we have param information in options
+    if (!element && action.elementId.includes('switch_tab') && action.options && action.options.param) {
+      console.log(`Looking for tab button with param: ${action.options.param}`);
+      const tabButtons = document.querySelectorAll('[data-ai-action="switch_tab"]');
+      
+      for (const btn of Array.from(tabButtons)) {
+        const btnParam = btn.getAttribute('data-ai-action-param');
+        if (btnParam === action.options.param) {
+          console.log(`Found tab button for ${action.options.param} via options`);
+          element = btn as HTMLElement;
+          break;
+        }
+      }
+    }
+    
     if (!element) {
       throw new Error(`Element with ID ${action.elementId} not found`);
     }
@@ -152,8 +222,37 @@ export class ActionExecutor {
     // If not found and we have element info, try to use the DOM path
     if (!element && elementInfo && elementInfo.path && elementInfo.path.length > 0) {
       try {
-        // Try to create a CSS selector from the path
-        const selector = elementInfo.path.join(' > ');
+        // Try to create a CSS selector from the path - ensure class names are properly escaped
+        // Process each path segment to escape any special characters in class names
+        const processedPath = elementInfo.path.map(segment => {
+          // Parse the segment into tag, id, and classes
+          const tagMatch = segment.match(/^([a-zA-Z0-9-]+)/);
+          const idMatch = segment.match(/#([a-zA-Z0-9-]+)/);
+          const classMatches = segment.match(/\.([a-zA-Z0-9_-][^\s.]*)/g);
+          
+          // Start with the tag
+          let processed = tagMatch ? tagMatch[1] : '';
+          
+          // Add the ID if it exists
+          if (idMatch) {
+            processed += `#${idMatch[1]}`;
+          }
+          
+          // Add properly escaped classes if they exist
+          if (classMatches) {
+            classMatches.forEach(classMatch => {
+              // Remove the dot and escape special characters
+              const className = classMatch.substring(1).replace(/([:\\.!@#$%^&*()+=])/g, '\\$1');
+              processed += `.${className}`;
+            });
+          }
+          
+          return processed;
+        });
+        
+        // Create the final selector
+        const selector = processedPath.join(' > ');
+        console.log('Using selector:', selector);
         const elements = document.querySelectorAll(selector);
         
         if (elements.length === 1) {
@@ -177,8 +276,66 @@ export class ActionExecutor {
 
     // If still not found, try some fallbacks based on ID patterns
     if (!element) {
-      // For dynamically generated action IDs from API
-      if (id.startsWith('action-')) {
+      // Check for notific-action- prefix to handle specific actions
+      if (id.startsWith('notific-action-')) {
+        // Extract the action name (everything after notific-action- and before any random suffix)
+        const actionMatch = id.match(/notific-action-([^-]+)/);
+        if (actionMatch && actionMatch[1]) {
+          const baseAction = actionMatch[1];
+          console.log(`Trying fallback for action: ${baseAction}`);
+          
+          // Special handling for switch_tab action since it's critical for navigation
+          if (baseAction === 'switch_tab') {
+            // Try to find the tab element by data-ai-action attribute
+            const tabButtons = document.querySelectorAll('[data-ai-action="switch_tab"]');
+            
+            if (tabButtons.length > 0) {
+              // If there's param information in the elementInfo, use it to find the right tab
+              if (elementInfo && elementInfo.accessParam) {
+                // Look for the tab with the matching param attribute
+                for (const btn of Array.from(tabButtons)) {
+                  if (btn.getAttribute('data-ai-action-param') === elementInfo.accessParam) {
+                    element = btn as HTMLElement;
+                    console.log(`Fallback: Found tab button for ${elementInfo.accessParam}`);
+                    break;
+                  }
+                }
+              }
+              
+              // If not found with accessParam, just use the first one
+              if (!element) {
+                element = tabButtons[0] as HTMLElement;
+                console.log('Fallback: Found tab button (first one)');
+              }
+            }
+          } 
+          // For standard actions like clear_form, submit_form, etc.
+          else {
+            // Look for elements with the exact data-ai-action
+            const actionElements = document.querySelectorAll(`[data-ai-action="${baseAction}"]`);
+            if (actionElements.length > 0) {
+              element = actionElements[0] as HTMLElement;
+              console.log(`Fallback: Found ${baseAction} button by data-ai-action`);
+            } 
+            // Otherwise resort to the old clear/submit checks
+            else if (baseAction.includes('clear')) {
+              const clearButtons = document.querySelectorAll('[data-ai-action="clear_form"]');
+              if (clearButtons.length > 0) {
+                element = clearButtons[0] as HTMLElement;
+                console.log('Fallback: Found clear button by data-ai-action');
+              }
+            } else {
+              const submitButtons = document.querySelectorAll('[data-ai-action="submit_form"]');
+              if (submitButtons.length > 0) {
+                element = submitButtons[0] as HTMLElement;
+                console.log('Fallback: Found submit button by data-ai-action');
+              }
+            }
+          }
+        }
+      } 
+      // For old dynamically generated action IDs from API
+      else if (id.startsWith('action-')) {
         // Check if this looks like a clear action
         const isClearAction = id.includes('clear');
         
