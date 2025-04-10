@@ -960,11 +960,48 @@ var ActionExecutor = /*#__PURE__*/function () {
       }
       // If element not found and it's a field, try using data-ai-field attribute
       if (!element && id.startsWith('notific-field-')) {
-        var fieldName = id.replace('notific-field-', '').split('-')[0]; // Get the base field name
+        // Handle IDs with random suffixes like notific-field-supportTeamMembers-70mstn
+        var fieldName = '';
+        var parts = id.split('-');
+        if (parts.length >= 3) {
+          if (parts.length > 3) {
+            // For IDs with random suffixes, extract the actual field name
+            // If it has multiple parts like supportTeamMembers-value, join them
+            if (parts.length > 4) {
+              fieldName = parts.slice(2, -1).join('-');
+            } else {
+              fieldName = parts[2]; // Simple case like notific-field-supportTeamMembers-abc123
+            }
+          } else {
+            fieldName = parts[2]; // Simple case like notific-field-supportTeamMembers
+          }
+        }
+        console.log("Trying to find field by data-ai-field: ".concat(fieldName));
+        // Try to find the element by the extracted field name
         var fieldElements = document.querySelectorAll("[data-ai-field=\"".concat(fieldName, "\"]"));
         if (fieldElements.length > 0) {
           element = fieldElements[0];
           console.log("Found element by data-ai-field: ".concat(fieldName));
+        } else if (fieldName.includes('-')) {
+          // If the field name has hyphens and we didn't find it, try with just the first part
+          var simplifiedFieldName = fieldName.split('-')[0];
+          var simplifiedElements = document.querySelectorAll("[data-ai-field=\"".concat(simplifiedFieldName, "\"]"));
+          if (simplifiedElements.length > 0) {
+            element = simplifiedElements[0];
+            console.log("Found element by simplified data-ai-field: ".concat(simplifiedFieldName));
+          } else {
+            // Last resort - try finding by partial match
+            var allFields = document.querySelectorAll('[data-ai-field]');
+            for (var _i = 0, _Array$from = Array.from(allFields); _i < _Array$from.length; _i++) {
+              var el = _Array$from[_i];
+              var currentField = el.getAttribute('data-ai-field');
+              if (currentField && (fieldName.startsWith(currentField) || currentField.startsWith(fieldName))) {
+                element = el;
+                console.log("Found element by partial field match: ".concat(currentField));
+                break;
+              }
+            }
+          }
         }
       }
       // Cache the element for future use
@@ -1110,7 +1147,7 @@ var ActionExecutor = /*#__PURE__*/function () {
     key: "selectOption",
     value: (function () {
       var _selectOption = _asyncToGenerator(/*#__PURE__*/_regeneratorRuntime().mark(function _callee5(element, value) {
-        var optionFound, _i, _Array$from, option, changeEvent;
+        var optionFound, _i2, _Array$from2, option, changeEvent;
         return _regeneratorRuntime().wrap(function _callee5$(_context5) {
           while (1) switch (_context5.prev = _context5.next) {
             case 0:
@@ -1120,13 +1157,13 @@ var ActionExecutor = /*#__PURE__*/function () {
               }
               // Try to find the option with the given value or text
               optionFound = false;
-              _i = 0, _Array$from = Array.from(element.options);
+              _i2 = 0, _Array$from2 = Array.from(element.options);
             case 3:
-              if (!(_i < _Array$from.length)) {
+              if (!(_i2 < _Array$from2.length)) {
                 _context5.next = 12;
                 break;
               }
-              option = _Array$from[_i];
+              option = _Array$from2[_i2];
               if (!(option.value === value || option.text === value)) {
                 _context5.next = 9;
                 break;
@@ -1135,7 +1172,7 @@ var ActionExecutor = /*#__PURE__*/function () {
               optionFound = true;
               return _context5.abrupt("break", 12);
             case 9:
-              _i++;
+              _i2++;
               _context5.next = 3;
               break;
             case 12:

@@ -134,12 +134,52 @@ export class ActionExecutor {
     
     // If element not found and it's a field, try using data-ai-field attribute
     if (!element && id.startsWith('notific-field-')) {
-      const fieldName = id.replace('notific-field-', '').split('-')[0]; // Get the base field name
+      // Handle IDs with random suffixes like notific-field-supportTeamMembers-70mstn
+      let fieldName = '';
+      const parts = id.split('-');
+      
+      if (parts.length >= 3) {
+        if (parts.length > 3) {
+          // For IDs with random suffixes, extract the actual field name
+          // If it has multiple parts like supportTeamMembers-value, join them
+          if (parts.length > 4) {
+            fieldName = parts.slice(2, -1).join('-');
+          } else {
+            fieldName = parts[2]; // Simple case like notific-field-supportTeamMembers-abc123
+          }
+        } else {
+          fieldName = parts[2]; // Simple case like notific-field-supportTeamMembers
+        }
+      }
+      
+      console.log(`Trying to find field by data-ai-field: ${fieldName}`);
+      
+      // Try to find the element by the extracted field name
       const fieldElements = document.querySelectorAll(`[data-ai-field="${fieldName}"]`);
       
       if (fieldElements.length > 0) {
         element = fieldElements[0] as HTMLElement;
         console.log(`Found element by data-ai-field: ${fieldName}`);
+      } else if (fieldName.includes('-')) {
+        // If the field name has hyphens and we didn't find it, try with just the first part
+        const simplifiedFieldName = fieldName.split('-')[0];
+        const simplifiedElements = document.querySelectorAll(`[data-ai-field="${simplifiedFieldName}"]`);
+        
+        if (simplifiedElements.length > 0) {
+          element = simplifiedElements[0] as HTMLElement;
+          console.log(`Found element by simplified data-ai-field: ${simplifiedFieldName}`);
+        } else {
+          // Last resort - try finding by partial match
+          const allFields = document.querySelectorAll('[data-ai-field]');
+          for (const el of Array.from(allFields)) {
+            const currentField = el.getAttribute('data-ai-field');
+            if (currentField && (fieldName.startsWith(currentField) || currentField.startsWith(fieldName))) {
+              element = el as HTMLElement;
+              console.log(`Found element by partial field match: ${currentField}`);
+              break;
+            }
+          }
+        }
       }
     }
     
