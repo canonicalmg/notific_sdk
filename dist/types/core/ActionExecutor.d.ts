@@ -9,10 +9,12 @@ export declare class ActionExecutor {
     updateActionMap(actionMap: ActionMap): void;
     /**
      * Check if an action requires navigation steps before execution
+     * In simplified MVP, we don't use navigation steps
      */
     checkNavigationSteps(actionName: string): Action[] | null;
     /**
      * Execute a sequence of actions
+     * Simplified for MVP to directly execute actions without navigation steps
      */
     executeActions(actions: Action[]): Promise<boolean>;
     /**
@@ -21,6 +23,7 @@ export declare class ActionExecutor {
     private executeAction;
     /**
      * Find an element in the DOM by its ID
+     * Simplified for MVP to use direct ID lookup and data-ai-* attributes
      */
     private findElementById;
     /**

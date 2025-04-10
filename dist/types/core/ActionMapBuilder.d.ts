@@ -21,8 +21,7 @@ export declare class ActionMapBuilder {
      */
     private createEmptyActionMap;
     /**
-     * Builds a comprehensive catalog of all possible actions in the application
-     * including those that are not currently visible in the DOM
+     * Builds a simple catalog for the MVP version
      */
     private buildActionCatalog;
     /**
