@@ -915,6 +915,38 @@ var ActionExecutor = /*#__PURE__*/function () {
                 elementId: tabElement.id
               };
             }
+            // Special case for workflows tab - try to find the element directly by checking the DOM
+            if (step.param === 'workflows') {
+              console.log('🔍 SPECIAL CASE: Looking for workflows tab button in DOM');
+              var workflowsTabButton = Array.from(tabButtons).find(function (btn) {
+                var _a;
+                return btn.getAttribute('data-ai-action-param') === 'workflows' || ((_a = btn.textContent) === null || _a === void 0 ? void 0 : _a.trim().toLowerCase()) === 'workflows';
+              });
+              if (workflowsTabButton) {
+                console.log('✅ Found workflows tab button directly in DOM');
+                // Create a fixed ID for the workflow tab
+                return {
+                  type: 'click',
+                  elementId: 'tab-workflows-direct',
+                  options: {
+                    param: 'workflows',
+                    directElement: workflowsTabButton,
+                    buttonIndex: 2 // Usually the third button (index 2)
+                  }
+                };
+              } else {
+                console.log('❌ Could not find workflows tab button directly - using index-based fallback');
+                // Create a fixed ID for the workflow tab that will be handled by index
+                return {
+                  type: 'click',
+                  elementId: 'tab-workflows-index-2',
+                  options: {
+                    param: 'workflows',
+                    buttonIndex: 2 // Usually the third button (index 2)
+                  }
+                };
+              }
+            }
             // If we couldn't find a matching element in our action map
             // Generate a generic tab action ID that our fallback mechanism can handle
             console.log("Could not find tab element in action map, using generic ID for tab ".concat(step.param));
@@ -1094,76 +1126,178 @@ var ActionExecutor = /*#__PURE__*/function () {
     key: "executeAction",
     value: (function () {
       var _executeAction = _asyncToGenerator(/*#__PURE__*/_regeneratorRuntime().mark(function _callee2(action) {
-        var element, tabButtons, _i2, _Array$from2, btn, btnParam;
+        var _a, _b, element, tabParam, tabButtons, tabArray, index, _tabButtons, _i2, _Array$from2, btn, btnParam, btnText, _tabArray, _tabArray2, _i3, _tabArray3, _btn, text;
         return _regeneratorRuntime().wrap(function _callee2$(_context3) {
           while (1) switch (_context3.prev = _context3.next) {
             case 0:
               element = this.findElementById(action.elementId); // Special handling for switch_tab when we have param information in options
-              if (!(!element && action.elementId.includes('switch_tab') && action.options && action.options.param)) {
+              if (!(!element && action.elementId.includes('switch_tab'))) {
+                _context3.next = 53;
+                break;
+              }
+              // Try to extract the param from options or from the element ID
+              tabParam = null; // If we have a direct DOM element reference from previous processing, use it
+              if (!(action.options && action.options.directElement)) {
+                _context3.next = 8;
+                break;
+              }
+              console.log('Using direct element reference for tab switching');
+              element = action.options.directElement;
+              _context3.next = 53;
+              break;
+            case 8:
+              if (!(action.options && typeof action.options.buttonIndex === 'number')) {
                 _context3.next = 15;
                 break;
               }
-              console.log("Looking for tab button with param: ".concat(action.options.param));
               tabButtons = document.querySelectorAll('[data-ai-action="switch_tab"]');
-              _i2 = 0, _Array$from2 = Array.from(tabButtons);
-            case 5:
+              tabArray = Array.from(tabButtons);
+              index = action.options.buttonIndex;
+              if (tabArray.length > index) {
+                console.log("Using tab button at index ".concat(index));
+                element = tabArray[index];
+              }
+              _context3.next = 53;
+              break;
+            case 15:
+              // First check if we have it in options
+              if (action.options && action.options.param) {
+                tabParam = action.options.param;
+              }
+              // Then try to check if the element ID itself has the tab name
+              else if (action.elementId.includes('-workflows')) {
+                tabParam = 'workflows';
+              } else if (action.elementId.includes('-dashboard')) {
+                tabParam = 'dashboard';
+              } else if (action.elementId.includes('-integrations')) {
+                tabParam = 'integrations';
+              } else if (action.elementId.includes('-billing')) {
+                tabParam = 'billing';
+              } else if (action.elementId.includes('-settings')) {
+                tabParam = 'settings';
+              }
+              console.log("Looking for tab button with param: ".concat(tabParam || 'unknown'));
+              _tabButtons = document.querySelectorAll('[data-ai-action="switch_tab"]');
+              console.log("Found ".concat(_tabButtons.length, " tab buttons"));
+              // If we have a specific param, try to find the matching button
+              if (!tabParam) {
+                _context3.next = 37;
+                break;
+              }
+              _i2 = 0, _Array$from2 = Array.from(_tabButtons);
+            case 21:
               if (!(_i2 < _Array$from2.length)) {
-                _context3.next = 15;
+                _context3.next = 37;
                 break;
               }
               btn = _Array$from2[_i2];
               btnParam = btn.getAttribute('data-ai-action-param');
-              if (!(btnParam === action.options.param)) {
-                _context3.next = 12;
+              console.log("Checking button with param: ".concat(btnParam));
+              if (!(btnParam === tabParam)) {
+                _context3.next = 29;
                 break;
               }
-              console.log("Found tab button for ".concat(action.options.param, " via options"));
+              console.log("Found tab button for ".concat(tabParam, " via specific match"));
               element = btn;
-              return _context3.abrupt("break", 15);
-            case 12:
+              return _context3.abrupt("break", 37);
+            case 29:
+              // Also try to match by text content
+              btnText = (_a = btn.textContent) === null || _a === void 0 ? void 0 : _a.trim().toLowerCase();
+              if (!(btnText === tabParam.toLowerCase())) {
+                _context3.next = 34;
+                break;
+              }
+              console.log("Found tab button for ".concat(tabParam, " via text content"));
+              element = btn;
+              return _context3.abrupt("break", 37);
+            case 34:
               _i2++;
-              _context3.next = 5;
+              _context3.next = 21;
               break;
-            case 15:
+            case 37:
+              // If we still don't have an element but asked for the "workflows" tab
+              // This is a special case to handle the reported issue
+              if (!element && tabParam === 'workflows') {
+                console.log('WORKFLOWS TAB SPECIAL CASE: Finding button by index (2)');
+                // Use the third button (index 2) which should be workflows
+                _tabArray = Array.from(_tabButtons);
+                if (_tabArray.length >= 3) {
+                  element = _tabArray[2];
+                  console.log('Using workflows tab button by index');
+                }
+              }
+              // EXACT MATCH for workflows via text content
+              if (!(!element && tabParam === 'workflows')) {
+                _context3.next = 52;
+                break;
+              }
+              console.log('TRYING EXACT TEXT MATCH for workflows tab');
+              _tabArray2 = Array.from(_tabButtons);
+              _i3 = 0, _tabArray3 = _tabArray2;
+            case 42:
+              if (!(_i3 < _tabArray3.length)) {
+                _context3.next = 52;
+                break;
+              }
+              _btn = _tabArray3[_i3];
+              text = (_b = _btn.textContent) === null || _b === void 0 ? void 0 : _b.trim().toLowerCase();
+              if (!(text === 'workflows')) {
+                _context3.next = 49;
+                break;
+              }
+              element = _btn;
+              console.log('Found workflows tab by exact text match');
+              return _context3.abrupt("break", 52);
+            case 49:
+              _i3++;
+              _context3.next = 42;
+              break;
+            case 52:
+              // If still not found, resort to any tab button
+              if (!element && _tabButtons.length > 0) {
+                console.log('No specific tab button found, using first available tab button');
+                element = _tabButtons[0];
+              }
+            case 53:
               if (element) {
-                _context3.next = 17;
+                _context3.next = 55;
                 break;
               }
               throw new Error("Element with ID ".concat(action.elementId, " not found"));
-            case 17:
+            case 55:
               // Add a visual highlight effect to the element
               this.highlightElement(element);
               _context3.t0 = action.type;
-              _context3.next = _context3.t0 === 'fill' ? 21 : _context3.t0 === 'click' ? 24 : _context3.t0 === 'select' ? 27 : _context3.t0 === 'scroll' ? 30 : _context3.t0 === 'custom' ? 33 : 36;
+              _context3.next = _context3.t0 === 'fill' ? 59 : _context3.t0 === 'click' ? 62 : _context3.t0 === 'select' ? 65 : _context3.t0 === 'scroll' ? 68 : _context3.t0 === 'custom' ? 71 : 74;
               break;
-            case 21:
-              _context3.next = 23;
+            case 59:
+              _context3.next = 61;
               return this.fillField(element, action.value || '');
-            case 23:
-              return _context3.abrupt("break", 37);
-            case 24:
-              _context3.next = 26;
+            case 61:
+              return _context3.abrupt("break", 75);
+            case 62:
+              _context3.next = 64;
               return this.clickElement(element);
-            case 26:
-              return _context3.abrupt("break", 37);
-            case 27:
-              _context3.next = 29;
+            case 64:
+              return _context3.abrupt("break", 75);
+            case 65:
+              _context3.next = 67;
               return this.selectOption(element, action.value || '');
-            case 29:
-              return _context3.abrupt("break", 37);
-            case 30:
-              _context3.next = 32;
+            case 67:
+              return _context3.abrupt("break", 75);
+            case 68:
+              _context3.next = 70;
               return this.scrollToElement(element);
-            case 32:
-              return _context3.abrupt("break", 37);
-            case 33:
-              _context3.next = 35;
+            case 70:
+              return _context3.abrupt("break", 75);
+            case 71:
+              _context3.next = 73;
               return this.executeCustomAction(element, action.options);
-            case 35:
-              return _context3.abrupt("break", 37);
-            case 36:
+            case 73:
+              return _context3.abrupt("break", 75);
+            case 74:
               throw new Error("Unknown action type: ".concat(action.type));
-            case 37:
+            case 75:
             case "end":
               return _context3.stop();
           }
@@ -1225,8 +1359,8 @@ var ActionExecutor = /*#__PURE__*/function () {
             element = elements[0];
           } else if (elements.length > 1) {
             // If multiple elements match, try to find the one with the matching data attribute
-            for (var _i3 = 0, _Array$from3 = Array.from(elements); _i3 < _Array$from3.length; _i3++) {
-              var el = _Array$from3[_i3];
+            for (var _i4 = 0, _Array$from3 = Array.from(elements); _i4 < _Array$from3.length; _i4++) {
+              var el = _Array$from3[_i4];
               if (elementInfo.type === 'field' && el.getAttribute('data-ai-field') === elementInfo.name) {
                 element = el;
                 break;
@@ -1257,8 +1391,8 @@ var ActionExecutor = /*#__PURE__*/function () {
                 // If there's param information in the elementInfo, use it to find the right tab
                 if (elementInfo && elementInfo.accessParam) {
                   // Look for the tab with the matching param attribute
-                  for (var _i4 = 0, _Array$from4 = Array.from(tabButtons); _i4 < _Array$from4.length; _i4++) {
-                    var btn = _Array$from4[_i4];
+                  for (var _i5 = 0, _Array$from4 = Array.from(tabButtons); _i5 < _Array$from4.length; _i5++) {
+                    var btn = _Array$from4[_i5];
                     if (btn.getAttribute('data-ai-action-param') === elementInfo.accessParam) {
                       element = btn;
                       console.log("Fallback: Found tab button for ".concat(elementInfo.accessParam));
@@ -1462,7 +1596,7 @@ var ActionExecutor = /*#__PURE__*/function () {
     key: "selectOption",
     value: (function () {
       var _selectOption = _asyncToGenerator(/*#__PURE__*/_regeneratorRuntime().mark(function _callee5(element, value) {
-        var optionFound, _i5, _Array$from5, option, changeEvent;
+        var optionFound, _i6, _Array$from5, option, changeEvent;
         return _regeneratorRuntime().wrap(function _callee5$(_context6) {
           while (1) switch (_context6.prev = _context6.next) {
             case 0:
@@ -1472,13 +1606,13 @@ var ActionExecutor = /*#__PURE__*/function () {
               }
               // Try to find the option with the given value or text
               optionFound = false;
-              _i5 = 0, _Array$from5 = Array.from(element.options);
+              _i6 = 0, _Array$from5 = Array.from(element.options);
             case 3:
-              if (!(_i5 < _Array$from5.length)) {
+              if (!(_i6 < _Array$from5.length)) {
                 _context6.next = 12;
                 break;
               }
-              option = _Array$from5[_i5];
+              option = _Array$from5[_i6];
               if (!(option.value === value || option.text === value)) {
                 _context6.next = 9;
                 break;
@@ -1487,7 +1621,7 @@ var ActionExecutor = /*#__PURE__*/function () {
               optionFound = true;
               return _context6.abrupt("break", 12);
             case 9:
-              _i5++;
+              _i6++;
               _context6.next = 3;
               break;
             case 12:
